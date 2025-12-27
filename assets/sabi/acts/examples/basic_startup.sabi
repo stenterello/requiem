@@ -1,6 +1,6 @@
 SCENE basic_startup
-    (GUI textbox changes to "TEXTBOX_NASTYA")
-    (GUI namebox changes to "NAMEBOX")
+    (set textbox to "TEXTBOX_NASTYA")
+    (set namebox to "NAMEBOX")
     (Background changes to "main_classroom_noon")
     (Nayu appears concerned)
     MC: "Welcome to Sabi! A Visual Novel engine written in Rust and Bevy."

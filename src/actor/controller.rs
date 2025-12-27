@@ -465,7 +465,7 @@ fn setup(
         }
     }
     
-    if char_folder_loaded.0 == true && anim_folder_loaded.0 == true {
+    if char_folder_loaded.0 && anim_folder_loaded.0 {
         ev_writer.write(ControllerReadyMessage(Controller::Character));
         controller_state.set(CharacterControllerState::Idle);
         info!("character controller ready");

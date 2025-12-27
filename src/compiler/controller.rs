@@ -3,7 +3,7 @@ use crate::chat::controller::InfoTextMessage;
 use crate::compiler::ast::Statement;
 use crate::compiler::calling::{Invoke, InvokeContext, SceneChangeMessage, ActChangeMessage};
 use crate::{Cursor, HistoryItem, SabiEnd, ast};
-use crate::{BackgroundChangeMessage, CharacterSayMessage, GUIChangeMessage, SabiStart, ScriptId, VisualNovelState};
+use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, SabiStart, ScriptId, VisualNovelState};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -262,7 +262,7 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h> (
     mut game_state: ResMut<'a, VisualNovelState>,
     mut character_say_message: MessageWriter<'b, CharacterSayMessage>,
     mut background_change_message: MessageWriter<'c, BackgroundChangeMessage>,
-    mut gui_change_message: MessageWriter<'d, GUIChangeMessage>,
+    mut gui_change_message: MessageWriter<'d, UiChangeMessage>,
     mut scene_change_message: MessageWriter<'e, SceneChangeMessage>,
     mut act_change_message: MessageWriter<'f, ActChangeMessage>,
     mut character_change_message: MessageWriter<'g, ActorChangeMessage>,

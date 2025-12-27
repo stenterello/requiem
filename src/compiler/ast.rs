@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 use crate::{
-    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, background::controller::{BackgroundDirection, BackgroundOperation}, chat::controller::{GuiChangeTarget, GuiImageMode}
+    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, background::controller::{BackgroundDirection, BackgroundOperation}, chat::controller::{UiChangeTarget, UiImageMode}
 };
 
 #[derive(Parser)]
@@ -100,7 +100,7 @@ pub(crate) enum CodeStatement {
 #[derive(Debug, Clone)]
 pub(crate) enum StageCommand {
     BackgroundChange { operation: BackgroundOperation },
-    GUIChange { gui_target: GuiChangeTarget, sprite_expr: Box<Expr>, image_mode: GuiImageMode },
+    UiChange { ui_target: UiChangeTarget, target_font: Option<Box<Expr>>, sprite_expr: Option<Box<Expr>>, image_mode: Option<UiImageMode> },
     SceneChange { scene_expr: Box<Expr> },
     ActChange { act_expr: Box<Expr> },
     CharacterChange { character: String, operation: ActorOperation },
@@ -326,37 +326,56 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
 
             StageCommand::BackgroundChange { operation }
         },
-        Rule::gui_change => {
+        Rule::ui_change => {
             let mut inner = command_pair.into_inner();
             let gui_element_pair = inner.next()
-                .context("GUI change missing GUI element")?;
-            let sprite_expr_pair = inner.next()
-                .context("GUI change missing sprite expression")?;
+                .context("UI change missing UI element")?;
 
-            // Convert gui_element to the appropriate ID
-            let gui_target = match gui_element_pair.as_str() {
-                "textbox" => GuiChangeTarget::TextBoxBackground,
-                "namebox" => GuiChangeTarget::NameBoxBackground,
-                other => bail!("Unknown GUI element: {}", other)
+            // Convert ui_element to the appropriate ID
+            let ui_target = match gui_element_pair.as_str() {
+                "textbox" => UiChangeTarget::TextBoxBackground,
+                "namebox" => UiChangeTarget::NameBoxBackground,
+                "font"    => UiChangeTarget::Font,
+                other => bail!("Unknown UI element: {}", other)
             };
 
-            let sprite_expr = build_expression(sprite_expr_pair)
-                .context("Failed to build sprite expression for GUI change")?;
-
-            let image_mode = if let Some(image_mode) = inner.next() {
-                ensure!(image_mode.as_rule() == Rule::image_mode,
-                    "Expected image mode, found {:?}", image_mode.as_rule());
-                match image_mode.as_str() {
-                    "sliced" => GuiImageMode::Sliced,
-                    other => bail!("Unrecognized image mode definition: {}", other)
+            match ui_target {
+                UiChangeTarget::Font => {
+                    let font_expr_pair = inner.next()
+                        .context("Ui font change missing target font")?;
+                    let font_expr = build_expression(font_expr_pair)
+                        .context("Failed to build font expression for UI change")?;
+                    StageCommand::UiChange {
+                        ui_target,
+                        target_font: Some(Box::new(font_expr)),
+                        sprite_expr: None,
+                        image_mode: None,
+                    }
+                },
+                _ => {
+                    let sprite_expr_pair = inner.next()
+                        .context("UI change missing sprite expression")?;
+                    let sprite_expr = build_expression(sprite_expr_pair)
+                        .context("Failed to build sprite expression for UI change")?;
+        
+                    let image_mode = if let Some(image_mode) = inner.next() {
+                        ensure!(image_mode.as_rule() == Rule::image_mode,
+                            "Expected image mode, found {:?}", image_mode.as_rule());
+                        match image_mode.as_str() {
+                            "sliced" => Some(UiImageMode::Sliced),
+                            other => bail!("Unrecognized image mode definition: {}", other)
+                        }
+                    } else { Some(UiImageMode::Auto) };
+                    
+                    StageCommand::UiChange {
+                        ui_target,
+                        target_font: None,
+                        sprite_expr: Some(Box::new(sprite_expr)),
+                        image_mode,
+                    }
                 }
-            } else { GuiImageMode::Auto };
-
-            StageCommand::GUIChange {
-                gui_target,
-                sprite_expr: Box::new(sprite_expr),
-                image_mode,
             }
+
         },
         Rule::scene_change => {
             let expr_pair = command_pair.into_inner().next()

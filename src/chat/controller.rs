@@ -17,6 +17,7 @@ use crate::{
 };
 
 const UI_ASSET_PATH: &str = "sabi/ui";
+const UI_FONTS_PATH: &str = "sabi/fonts";
 
 /* Messages */
 #[derive(Message)]
@@ -29,10 +30,11 @@ pub(crate) struct InfoTextMessage {
     pub text: String
 }
 #[derive(Message)]
-pub(crate) struct GUIChangeMessage {
-    pub gui_target: GuiChangeTarget,
-    pub sprite_id: String,
-    pub image_mode: GuiImageMode,
+pub(crate) struct UiChangeMessage {
+    pub ui_target: UiChangeTarget,
+    pub target_font: Option<String>,
+    pub sprite_id: Option<String>,
+    pub image_mode: Option<UiImageMode>,
 }
 
 /* States */
@@ -94,20 +96,31 @@ pub(crate) struct HistoryText;
 #[derive(Resource)]
 pub(crate) struct ChatScrollStopwatch(Stopwatch);
 #[derive(Resource)]
-struct HandleToGuiFolder(Handle<LoadedFolder>);
+struct HandleToUiFolder(Handle<LoadedFolder>);
 #[derive(Resource)]
-struct GuiImages(HashMap<String, Handle<Image>>);
+struct HandleToFontsFolder(Handle<LoadedFolder>);
+#[derive(Resource)]
+struct UiImages(HashMap<String, Handle<Image>>);
 #[derive(Resource)]
 pub(crate) struct CurrentTextBoxBackground(pub ImageNode);
+#[derive(Resource, Default)]
+pub(crate) struct FontRegistry(pub HashMap<String, Handle<Font>>);
+#[derive(Resource)]
+pub(crate) struct CurrentFont(pub Handle<Font>);
+#[derive(Resource, Default)]
+pub(crate) struct UiFolderLoaded(pub bool);
+#[derive(Resource, Default)]
+pub(crate) struct FontsFolderLoaded(pub bool);
 
 /* Custom types */
 #[derive(Debug, Clone)]
-pub(crate) enum GuiChangeTarget {
+pub(crate) enum UiChangeTarget {
     TextBoxBackground,
     NameBoxBackground,
+    Font,
 }
 #[derive(Debug, Clone, Default)]
-pub(crate) enum GuiImageMode {
+pub(crate) enum UiImageMode {
     Sliced,
     #[default]
     Auto
@@ -125,20 +138,30 @@ pub(crate) struct ChatController;
 impl Plugin for ChatController {
     fn build(&self, app: &mut App){
         app.insert_resource(ChatScrollStopwatch(Stopwatch::new()))
+            .insert_resource(UiFolderLoaded::default())
+            .insert_resource(FontsFolderLoaded::default())
             .init_state::<ChatControllerState>()
             .init_state::<ChatControllerSubState>()
-            .add_systems(OnEnter(ChatControllerState::Loading), import_gui_sprites)
+            .add_systems(OnEnter(ChatControllerState::Loading), import_assets)
             .add_systems(Update, setup.run_if(in_state(ChatControllerState::Loading)))
             .add_message::<CharacterSayMessage>()
             .add_message::<InfoTextMessage>()
-            .add_message::<GUIChangeMessage>()
+            .add_message::<UiChangeMessage>()
             .add_plugins(UiWidgetsPlugins)
             .add_systems(Update, wait_trigger)
             .add_systems(OnEnter(ChatControllerState::Running), spawn_chatbox)
-            .add_systems(Update, (update_chatbox, update_infotext, update_gui).run_if(in_state(ChatControllerState::Running)))
+            .add_systems(Update, (update_chatbox, update_infotext, update_ui).run_if(in_state(ChatControllerState::Running)))
+            .add_systems(OnExit(ChatControllerState::Running), clean_resources)
             .add_observer(button_clicked_history_state)
             .add_observer(button_clicked_default_state);
     }
+}
+fn clean_resources(
+    mut ui_loaded_folder: ResMut<UiFolderLoaded>,
+    mut fonts_loaded_folder: ResMut<FontsFolderLoaded>,
+) {
+    ui_loaded_folder.0 = false;
+    fonts_loaded_folder.0 = false;
 }
 fn button_clicked_history_state(
     trigger: On<Activate>,
@@ -164,7 +187,7 @@ fn button_clicked_history_state(
     }
     Ok(())
 }
-fn button_clicked_default_state(
+fn button_clicked_default_state<'a>(
     trigger: On<Activate>,
     mut commands: Commands,
     vncontainer_visibility: Single<&mut Visibility, (With<VNContainer>, Without<InfoTextContainer>, Without<InfoTextComponent>)>,
@@ -176,7 +199,7 @@ fn button_clicked_default_state(
     ui_root: Single<Entity, With<UiRoot>>,
     q_buttons: Query<(Entity, &UiButtons)>,
     current_plate: Res<CurrentTextBoxBackground>,
-    asset_server: Res<AssetServer>,
+    current_font: Res<'a, CurrentFont>,
     current_sub_state: Res<State<ChatControllerSubState>>,
     mut sub_state: ResMut<NextState<ChatControllerSubState>>,
 ) -> Result<(), BevyError> {
@@ -190,7 +213,7 @@ fn button_clicked_default_state(
     match entity.1 {
         UiButtons::OpenHistory => {
             warn!("Open history clicked");
-            let history_panel_id = commands.spawn(history_panel(current_plate, &game_state, &asset_server)?).id();
+            let history_panel_id = commands.spawn(history_panel(current_plate, &game_state, current_font.0.clone())?).id();
             commands.entity(*ui_root).add_child(history_panel_id);
             sub_state.set(ChatControllerSubState::History);
         },
@@ -256,49 +279,95 @@ fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     loaded_folders: Res<Assets<LoadedFolder>>,
-    folder_handle: Res<HandleToGuiFolder>,
+    ui_folder_handle: Res<HandleToUiFolder>,
+    fonts_folder_handle: Res<HandleToFontsFolder>,
+    mut ui_loaded_folder: ResMut<UiFolderLoaded>,
+    mut fonts_loaded_folder: ResMut<FontsFolderLoaded>,
     mut controller_state: ResMut<NextState<ChatControllerState>>,
     mut msg_writer: MessageWriter<ControllerReadyMessage>,
 ) -> Result<(), BevyError> {
-    let mut gui_sprites = HashMap::<String, Handle<Image>>::new();
-    if let Some(state) = asset_server.get_load_state(folder_handle.0.id()) {
-        match state {
-            LoadState::Loaded => {
-                if let Some(loaded_folder) = loaded_folders.get(folder_handle.0.id()) {
-                    for handle in &loaded_folder.handles {
-                        let path = handle.path()
-                            .context("Error retrieving gui path")?;
-                        let filename = path.path().file_stem()
-                            .context("GUI file has no name")?
-                            .to_string_lossy()
-                            .to_string();
-                        gui_sprites.insert(filename, handle.clone().typed());
+    
+    // ui folder
+    if !ui_loaded_folder.0 {
+        if let Some(state) = asset_server.get_load_state(ui_folder_handle.0.id()) {
+            let mut gui_sprites = HashMap::<String, Handle<Image>>::new();
+            match state {
+                LoadState::Loaded => {
+                    if let Some(loaded_folder) = loaded_folders.get(ui_folder_handle.0.id()) {
+                        for handle in &loaded_folder.handles {
+                            let path = handle.path()
+                                .context("Error retrieving gui path")?;
+                            let filename = path.path().file_stem()
+                                .context("GUI file has no name")?
+                                .to_string_lossy()
+                                .to_string();
+                            gui_sprites.insert(filename, handle.clone().typed());
+                            ui_loaded_folder.0 = true;
+                        }
+                    } else {
+                        return Err(anyhow::anyhow!("Could not find chat loaded folder!").into());
                     }
-                } else {
-                    return Err(anyhow::anyhow!("Could not find chat loaded folder!").into());
-                }
 
-                commands.insert_resource(GuiImages(gui_sprites));
-                controller_state.set(ChatControllerState::Idle);
-                msg_writer.write(ControllerReadyMessage(Controller::Chat));
-                info!("chat controller ready");
-            },
-            LoadState::Failed(e) => {
-                return Err(anyhow::anyhow!("Error loading GUI assets: {}", e.to_string()).into());
+                    commands.insert_resource(UiImages(gui_sprites));
+                },
+                LoadState::Failed(e) => {
+                    return Err(anyhow::anyhow!("Error loading GUI assets: {}", e.to_string()).into());
+                }
+                _ => {}
             }
-            _ => {}
         }
+    }
+    
+    // fonts folder
+    if !fonts_loaded_folder.0 {
+        if let Some(state) = asset_server.get_load_state(fonts_folder_handle.0.id()) {
+            let mut fonts = HashMap::<String, Handle<Font>>::new();
+            match state {
+                LoadState::Loaded => {
+                    if let Some(loaded_folder) = loaded_folders.get(fonts_folder_handle.0.id()) {
+                        for handle in &loaded_folder.handles {
+                            let path = handle.path()
+                                .context("Error retrieving gui path")?;
+                            let filename = path.path().file_stem()
+                                .context("GUI file has no name")?
+                                .to_string_lossy()
+                                .to_string();
+                            fonts.insert(filename, handle.clone().typed());
+                            fonts_loaded_folder.0 = true;
+                        }
+                    } else {
+                        return Err(anyhow::anyhow!("Could not find chat loaded folder!").into());
+                    }
+
+                    let default_handle = fonts.get("ALLER").context("Default font ALLER is not present")?.clone();
+                    commands.insert_resource(CurrentFont(default_handle));
+                    commands.insert_resource(FontRegistry(fonts));
+                },
+                LoadState::Failed(e) => {
+                    return Err(anyhow::anyhow!("Error loading GUI assets: {}", e.to_string()).into());
+                }
+                _ => {}
+            }
+        }
+    }
+    
+    if ui_loaded_folder.0 && fonts_loaded_folder.0 {
+        controller_state.set(ChatControllerState::Idle);
+        msg_writer.write(ControllerReadyMessage(Controller::Chat));
+        info!("chat controller ready");
     }
     Ok(())
 }
-fn import_gui_sprites(mut commands: Commands, asset_server: Res<AssetServer> ){
-    let loaded_folder = asset_server.load_folder(UI_ASSET_PATH);
-    commands.insert_resource(HandleToGuiFolder(loaded_folder));
+fn import_assets(mut commands: Commands, asset_server: Res<AssetServer> ){
+    let loaded_folder_ui = asset_server.load_folder(UI_ASSET_PATH);
+    let loaded_folder_fonts = asset_server.load_folder(UI_FONTS_PATH);
+    commands.insert_resource(HandleToUiFolder(loaded_folder_ui));
+    commands.insert_resource(HandleToFontsFolder(loaded_folder_fonts));
 }
 fn spawn_chatbox(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     ui_root: Single<Entity, With<UiRoot>>,
+    current_font: Res<CurrentFont>,
 ) -> Result<(), BevyError> {
     // Spawn Backplate + Nameplate
     // Container
@@ -314,7 +383,7 @@ fn spawn_chatbox(
     commands.entity(top_section).add_child(namebox);
 
     // NameText
-    let nametext = commands.spawn(nametext(&asset_server)).id();
+    let nametext = commands.spawn(nametext(current_font.0.clone())).id();
     commands.entity(namebox).add_child(nametext);
 
     // Backplate Node
@@ -322,7 +391,7 @@ fn spawn_chatbox(
     commands.entity(container).add_child(textbox_bg);
 
     // MessageText
-    let messagetext = commands.spawn(messagetext(&asset_server)).id();
+    let messagetext = commands.spawn(messagetext(current_font.0.clone())).id();
     commands.entity(textbox_bg).add_child(messagetext);
 
     // VN commands
@@ -330,7 +399,7 @@ fn spawn_chatbox(
     commands.entity(textbox_bg).add_child(vn_commands);
 
     // InfoText
-    let infotext_container = commands.spawn(infotext_container(&asset_server)).id();
+    let infotext_container = commands.spawn(infotext_container(current_font.0.clone())).id();
     commands.entity(ui_root.entity()).add_child(infotext_container);
     
     Ok(())
@@ -424,26 +493,30 @@ fn wait_trigger(
         controller_state.set(msg.0.into());
     }
 }
-fn update_gui(
+fn update_ui(
     mut commands: Commands,
-    mut change_messages: MessageReader<GUIChangeMessage>,
+    mut change_messages: MessageReader<UiChangeMessage>,
     mut q_image_node: Query<
         (&mut ImageNode, Has<TextBoxBackground>, Has<NameBoxBackground>),
         Or<(With<TextBoxBackground>, With<NameBoxBackground>)>
     >,
+    mut current_font: ResMut<CurrentFont>,
+    font_registry: Res<FontRegistry>,
+    mut q_fonts: Query<&mut TextFont>,
     concrete_images: Res<Assets<Image>>,
-    gui_images: Res<GuiImages>,
+    gui_images: Res<UiImages>,
 ) -> Result<(), BevyError> {
     for ev in change_messages.read() {
-        let image = gui_images.0.get(&ev.sprite_id)
-            .context(format!("GUI asset '{}' does not exist", ev.sprite_id))?;
-        match ev.gui_target {
-            GuiChangeTarget::TextBoxBackground => {
+        match ev.ui_target {
+            UiChangeTarget::TextBoxBackground => {
+                let sprite_id = ev.sprite_id.clone().context("Missing sprite id!")?;
+                let image = gui_images.0.get(&sprite_id)
+                    .context(format!("UI asset '{}' does not exist", sprite_id))?;
                 let mut target = q_image_node.iter_mut().find(|q| q.1 == true)
                     .context("Unable to find textbox")?.0;
                 target.image = image.clone();
                 target.image_mode = match ev.image_mode {
-                    GuiImageMode::Sliced => {
+                    Some(UiImageMode::Sliced) => {
                         let concrete_image = concrete_images.get(image).context("Could not find image")?;
                         let concrete_image_size = concrete_image.texture_descriptor.size;
                         let slice_cuts = BorderRect {
@@ -459,15 +532,26 @@ fn update_gui(
                             ..default()
                         })
                     },
-                    GuiImageMode::Auto => NodeImageMode::Auto
+                    Some(UiImageMode::Auto) => NodeImageMode::Auto,
+                    None => { return Err(anyhow::anyhow!("Ui Image Mode missing!").into()) }
                 };
                 commands.insert_resource(CurrentTextBoxBackground(target.clone()));
             }
-            GuiChangeTarget::NameBoxBackground => {
+            UiChangeTarget::NameBoxBackground => {
+                let sprite_id = ev.sprite_id.clone().context("Missing sprite id!")?;
+                let image = gui_images.0.get(&sprite_id)
+                    .context(format!("UI asset '{}' does not exist", sprite_id))?;
                 let mut target = q_image_node.iter_mut().find(|q| q.2 == true)
                     .context("Unable to find namebox")?.0;
 
                 target.image = image.clone();
+            },
+            UiChangeTarget::Font => {
+                let font_id = ev.target_font.clone().context("Missing target font!")?;
+                current_font.0 = font_registry.0.get(&font_id).context("Target font {font_id} not found in registry")?.clone();
+                for mut font in &mut q_fonts {
+                    font.font = current_font.0.clone();
+                }
             }
         };
     }

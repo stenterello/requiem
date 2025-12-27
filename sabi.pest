@@ -19,14 +19,14 @@ statement = _{
 // Stage directions
 stage_command = { "(" ~ stage_command_type ~ ")" }
     stage_command_type = _{
-        gui_change |
+        ui_change |
         background_change |
         scene_change |
         act_change |
         character_change |
         animation_change }
     background_change = { background_directive }
-    gui_change = { "GUI" ~ gui_element ~ "changes" ~ "to" ~ expr ~ image_mode? }
+    ui_change = { "set" ~ ui_element ~ "to" ~ expr ~ image_mode? }
     scene_change = { "Scene" ~ expr ~ "begins" }
     act_change = { "Act" ~ expr ~ "begins" }
     character_change = { character_name ~ character_action }
@@ -68,7 +68,7 @@ emotion_name = @{ ASCII_ALPHA+ }
 mc_identifier = { "MC" }
 narrator = { "info" }
 animation_identifier = { "Animated" ~ expr }
-gui_element = { "textbox" | "namebox" }
+ui_element = { "textbox" | "namebox" | "font" }
 image_mode = { "sliced" | "auto" }
 actor_spawn_directive = {
                             "appears" |

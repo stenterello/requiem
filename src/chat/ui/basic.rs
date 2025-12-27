@@ -2,10 +2,10 @@ use bevy::{color::palettes::css::BLACK, prelude::*};
 use bevy_ui_widgets::Button;
 
 use crate::{
-        chat::{
-            GUIScrollText, INFOTEXT_Z_INDEX_INACTIVE, UI_Z_INDEX, controller::{
-                InfoTextComponent, InfoTextContainer, MessageText, NameBoxBackground, NameText, TextBoxBackground, UiButtons, VNContainer, VnCommands
-            }, ui::FONT_PATH
+    chat::{
+        GUIScrollText, INFOTEXT_Z_INDEX_INACTIVE, UI_Z_INDEX, controller::{
+            InfoTextComponent, InfoTextContainer, MessageText, NameBoxBackground, NameText, TextBoxBackground, UiButtons, VNContainer, VnCommands
+        },
     },
     compiler::controller::SabiState
 };
@@ -47,7 +47,7 @@ pub(in crate::chat) fn namebox() -> impl Bundle {
     )
 }
 
-pub(in crate::chat) fn nametext(asset_server: &Res<AssetServer>) -> impl Bundle {
+pub(in crate::chat) fn nametext(font_handle: Handle<Font>) -> impl Bundle {
     (
         Node {
             margin: UiRect::default().with_left(px(35.)),
@@ -55,7 +55,7 @@ pub(in crate::chat) fn nametext(asset_server: &Res<AssetServer>) -> impl Bundle 
         },
         Text::new("TEST"),
         TextFont {
-            font: asset_server.load(FONT_PATH),
+            font: font_handle,
             font_size: 30.0,
             ..default()
         },
@@ -84,13 +84,13 @@ pub(in crate::chat) fn textbox() -> impl Bundle {
     )
 }
 
-pub(in crate::chat) fn messagetext(asset_server: &Res<AssetServer>) -> impl Bundle {
+pub(in crate::chat) fn messagetext(font_handle: Handle<Font>) -> impl Bundle {
     (
         Text::new("TEST"),
         GUIScrollText::default(),
         Node::default(),
         TextFont {
-            font: asset_server.load(FONT_PATH),
+            font: font_handle,
             font_size: 30.0,
             ..default()
         },
@@ -98,7 +98,7 @@ pub(in crate::chat) fn messagetext(asset_server: &Res<AssetServer>) -> impl Bund
     )
 }
 
-pub(in crate::chat) fn infotext_container(asset_server: &Res<AssetServer>) -> impl Bundle {
+pub(in crate::chat) fn infotext_container(font_handle: Handle<Font>) -> impl Bundle {
     (
         Node {
             width: percent(100),
@@ -118,12 +118,12 @@ pub(in crate::chat) fn infotext_container(asset_server: &Res<AssetServer>) -> im
         InfoTextContainer,
         DespawnOnExit(SabiState::Running),
         children![
-            infotext(asset_server)
+            infotext(font_handle)
         ]
     )
 }
 
-fn infotext(asset_server: &Res<AssetServer>) -> impl Bundle {
+fn infotext(font_handle: Handle<Font>) -> impl Bundle {
     (
         Text::new(""),
         GUIScrollText::default(),
@@ -134,7 +134,7 @@ fn infotext(asset_server: &Res<AssetServer>) -> impl Bundle {
             ..default()
         },
         TextFont {
-            font: asset_server.load(FONT_PATH),
+            font: font_handle,
             font_size: 40.0,
             ..default()
         },

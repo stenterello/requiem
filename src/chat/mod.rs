@@ -4,7 +4,7 @@ mod ui;
 pub(crate) use controller::ChatController;
 pub(crate) use controller::GUIScrollText;
 pub(crate) use controller::CharacterSayMessage;
-pub(crate) use controller::GUIChangeMessage;
+pub(crate) use controller::UiChangeMessage;
 
 const INFOTEXT_Z_INDEX_ACTIVE: i32 = 4;
 const INFOTEXT_Z_INDEX_INACTIVE: i32 = -1;

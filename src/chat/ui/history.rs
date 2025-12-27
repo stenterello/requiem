@@ -1,20 +1,19 @@
 use bevy::color::palettes::css::GRAY;
-use bevy::{asset::AssetServer, ecs::relationship::RelatedSpawner};
+use bevy::{ecs::relationship::RelatedSpawner};
 use bevy::prelude::*;
 use bevy_ui_widgets::{CoreScrollbarThumb, Scrollbar};
 
 use crate::chat::controller::{HistoryScrollbar, HistoryText, UiButtons};
-use crate::chat::ui::FONT_PATH;
 use crate::chat::ui::basic::button;
 use crate::{VisualNovelState, chat::{UI_Z_INDEX, controller::{CurrentTextBoxBackground, HistoryPanel}}};
 
 pub(crate) fn history_panel(
     current_plate: Res<CurrentTextBoxBackground>,
     game_state: &ResMut<VisualNovelState>,
-    asset_server: &Res<AssetServer>,
+    font_handle: Handle<Font>,
 ) -> Result<impl Bundle, BevyError> {
     
-    let history_text = history_text(asset_server, game_state)?;
+    let history_text = history_text(font_handle, game_state)?;
     let exit_history_button = button(UiButtons::ExitHistory)?;
     
     Ok((
@@ -93,9 +92,8 @@ fn scrollbar(entity: Entity) -> impl Bundle {
     )
 }
 
-fn history_text(asset_server: &Res<AssetServer>, game_state: &ResMut<VisualNovelState>) -> Result<impl Bundle, BevyError> {
+fn history_text(font_handle: Handle<Font>, game_state: &ResMut<VisualNovelState>) -> Result<impl Bundle, BevyError> {
     let history_text = game_state.history_summary()?.join("\n");
-    let font_handle = asset_server.load(FONT_PATH);
     Ok((
         Node {
             display: Display::Flex,

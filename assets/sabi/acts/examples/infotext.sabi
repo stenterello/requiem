@@ -1,7 +1,7 @@
 SCENE infotext_example
     (Background changes to "main_classroom_day")
-    (GUI namebox changes to "NAMEBOX")
-    (GUI textbox changes to "nine_slice" sliced)
+    (set namebox to "NAMEBOX")
+    (set textbox to "nine_slice" sliced)
     (Nayu appears sad)
     Nayu: "Sometimes I feel like I'm always the one telling the story"
     (Nayu disappears)

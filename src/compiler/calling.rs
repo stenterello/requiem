@@ -1,5 +1,5 @@
-use crate::chat::controller::InfoTextMessage;
-use crate::{BackgroundChangeMessage, CharacterSayMessage, GUIChangeMessage, ActorChangeMessage, VisualNovelState};
+use crate::chat::controller::{InfoTextMessage, UiChangeTarget};
+use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, ActorChangeMessage, VisualNovelState};
 use crate::compiler::ast::{CodeStatement, Dialogue, Evaluate, InfoText, StageCommand, Statement, TextItem};
 use bevy::prelude::*;
 use anyhow::{Context, Result};
@@ -19,7 +19,7 @@ pub struct InvokeContext<'l, 'a, 'b, 'd, 'e, 'f, 'g, 'h, 'i> {
     pub game_state: &'l mut ResMut<'a, VisualNovelState>,
     pub character_say_message: &'l mut MessageWriter<'b, CharacterSayMessage>,
     pub background_change_message: &'l mut MessageWriter<'d, BackgroundChangeMessage>,
-    pub gui_change_message: &'l mut MessageWriter<'e, GUIChangeMessage>,
+    pub gui_change_message: &'l mut MessageWriter<'e, UiChangeMessage>,
     pub scene_change_message: &'l mut MessageWriter<'f, SceneChangeMessage>,
     pub act_change_message: &'l mut MessageWriter<'g, ActChangeMessage>,
     pub actor_change_message: &'l mut MessageWriter<'h, ActorChangeMessage>,
@@ -75,18 +75,36 @@ impl Invoke for StageCommand {
                     operation: operation.clone(),
                 });
             },
-            StageCommand::GUIChange { gui_target, sprite_expr, image_mode } => {
-                let gui_target = gui_target.clone();
-                let sprite_id = sprite_expr.evaluate_into_string()
-                    .context("...while evaluating GUIChange sprite expression")?;
-                let image_mode = image_mode.clone();
+            StageCommand::UiChange { ui_target, target_font, sprite_expr, image_mode } => {
+                let ui_target = ui_target.clone();
+                let message = match ui_target {
+                    UiChangeTarget::Font => {
+                        let target_font = target_font.clone().context("Target font empty")?;
+                        let target_font_str = target_font.evaluate_into_string()?;
+                        info!("Invoking StageCommand::UiChange font to {}", target_font_str);
+                        UiChangeMessage {
+                            ui_target,
+                            target_font: Some(target_font_str),
+                            sprite_id: None,
+                            image_mode: None,
+                        }
+                    },
+                    _ => {
+                        let sprite_expr = sprite_expr.clone().context("Sprite expr empty")?;
+                        let sprite_id = sprite_expr.evaluate_into_string()
+                            .context("...while evaluating UiChange sprite expression")?;
+                        let image_mode = image_mode.clone();
+                        info!("Invoking StageCommand::UiChange to {:?}'s {}", ui_target, sprite_id);
+                        UiChangeMessage {
+                            ui_target,
+                            target_font: None,
+                            sprite_id: Some(sprite_id),
+                            image_mode,
+                        }
+                    }
+                };
                 
-                info!("Invoking StageCommand::GUIChange to {:?}'s {}", gui_target, sprite_id);
-                ctx.gui_change_message.write(GUIChangeMessage {
-                    gui_target,
-                    sprite_id,
-                    image_mode,
-                });
+                ctx.gui_change_message.write(message);
             },
             StageCommand::SceneChange { scene_expr } => {
                 let scene_id = scene_expr.evaluate_into_string()

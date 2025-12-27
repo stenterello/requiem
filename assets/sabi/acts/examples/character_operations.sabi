@@ -1,6 +1,6 @@
 SCENE character_operations_example
-    (GUI textbox changes to "TEXTBOX_NASTYA")
-    (GUI namebox changes to "NAMEBOX")
+    (set textbox to "TEXTBOX_NASTYA")
+    (set namebox to "NAMEBOX")
     Nayu: "In this act we're gonna give some examples about the actual functionalities on characters"
     (Nayu appears)
     Nayu: "Let's go!"

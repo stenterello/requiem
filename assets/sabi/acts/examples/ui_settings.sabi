@@ -1,0 +1,12 @@
+SCENE ui_settings
+    (set namebox to "NAMEBOX")
+    (set textbox to "nine_slice" sliced)
+    (Nayu appears)
+    Nayu: "In this example we're gonna dive into the ui settings"
+    Nayu: "If you're interested in using these settings, I suggest you to have the .sabi file of this example open and visibile"
+    Nayu: "Let's begin with something simple: font change"
+    (set font to "Quantico-Italic")
+    Nayu: "We have just changed the font during a scene"
+    (set textbox to "TEXTBOX_NASTYA")
+    Nayu: "Other typical uses of this feature is focused on Namebox or Textbox, as it just happened"
+CURTAIN
