@@ -104,9 +104,11 @@ fn check_loading_state(
     mut controller_state: ResMut<NextState<BackgroundControllerState>>,
     mut msg_writer: MessageWriter<ControllerReadyMessage>,
 ) -> Result<(), BevyError> {
-    let mut background_sprites: HashMap<String, Handle<Image>>= HashMap::new();
 
     if let Some(state) = asset_server.get_load_state(folder_handle.0.id()) {
+        
+        let mut background_sprites: HashMap<String, Handle<Image>> = HashMap::new();
+        
         match state {
             LoadState::Loaded => {
                 if let Some(loaded_folder) = loaded_folders.get(folder_handle.0.id()) {

@@ -4,14 +4,12 @@ use bevy::{asset::{LoadState, LoadedFolder}, prelude::*, time::Stopwatch};
 use bevy_ui_widgets::{Activate, UiWidgetsPlugins};
 
 use crate::{
-    VisualNovelState,
-    chat::{INFOTEXT_Z_INDEX_ACTIVE, INFOTEXT_Z_INDEX_INACTIVE, ui::{
+    VisualNovelState, audio::controller::AudioResources, chat::{INFOTEXT_Z_INDEX_ACTIVE, INFOTEXT_Z_INDEX_INACTIVE, ui::{
         basic::{
             backplate_container, infotext_container, messagetext, namebox, nametext, textbox, top_section, vn_commands
         },
         history::history_panel
-    }},
-    compiler::controller::{
+    }}, compiler::controller::{
         Controller, ControllerReadyMessage, ControllersSetStateMessage, SabiState, UiRoot
     }
 };
@@ -35,6 +33,7 @@ pub(crate) struct UiChangeMessage {
     pub target_font: Option<String>,
     pub sprite_id: Option<String>,
     pub image_mode: Option<UiImageMode>,
+    pub ui_sounds: Option<String>,
 }
 
 /* States */
@@ -91,6 +90,8 @@ pub(crate) struct HistoryPanel;
 pub(crate) struct HistoryScrollbar;
 #[derive(Component)]
 pub(crate) struct HistoryText;
+#[derive(Component)]
+pub(crate) struct UiAudioPlayer;
 
 /* Resources */
 #[derive(Resource)]
@@ -111,6 +112,8 @@ pub(crate) struct CurrentFont(pub Handle<Font>);
 pub(crate) struct UiFolderLoaded(pub bool);
 #[derive(Resource, Default)]
 pub(crate) struct FontsFolderLoaded(pub bool);
+#[derive(Resource, Default)]
+pub(crate) struct UiSounds(pub Option<Handle<AudioSource>>);
 
 /* Custom types */
 #[derive(Debug, Clone)]
@@ -118,6 +121,7 @@ pub(crate) enum UiChangeTarget {
     TextBoxBackground,
     NameBoxBackground,
     Font,
+    UiSounds,
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) enum UiImageMode {
@@ -140,6 +144,7 @@ impl Plugin for ChatController {
         app.insert_resource(ChatScrollStopwatch(Stopwatch::new()))
             .insert_resource(UiFolderLoaded::default())
             .insert_resource(FontsFolderLoaded::default())
+            .insert_resource(UiSounds::default())
             .init_state::<ChatControllerState>()
             .init_state::<ChatControllerSubState>()
             .add_systems(OnEnter(ChatControllerState::Loading), import_assets)
@@ -170,6 +175,8 @@ fn button_clicked_history_state(
     current_sub_state: Res<State<ChatControllerSubState>>,
     mut sub_state: ResMut<NextState<ChatControllerSubState>>,
     history_panel: Single<Entity, With<HistoryPanel>>,
+    ui_sounds: Res<UiSounds>,
+    ui_audio_player: Query<Entity, With<UiAudioPlayer>>,
 ) -> Result<(), BevyError> {
 
     if *current_sub_state != ChatControllerSubState::History {
@@ -177,13 +184,27 @@ fn button_clicked_history_state(
     }
 
     let entity = q_buttons.get(trigger.entity).context("Clicked Entity does not have UiButtons declared")?;
-    match entity.1 {
+    let clicked = match entity.1 {
         UiButtons::ExitHistory => {
             warn!("Exit history clicked");
             commands.entity(*history_panel).despawn();
             sub_state.set(ChatControllerSubState::Default);
+            true
         },
-        _ => {}
+        _ => { false }
+    };
+    
+    if clicked {
+        if let Some(sound) = &ui_sounds.0 {
+            if !ui_audio_player.is_empty() {
+                let entity = ui_audio_player.single().context("Unable to get ui audio player")?;
+                commands.entity(entity).despawn();
+            }
+            commands.spawn((
+                AudioPlayer::new(sound.clone()),
+                UiAudioPlayer
+            ));
+        }
     }
     Ok(())
 }
@@ -201,6 +222,8 @@ fn button_clicked_default_state<'a>(
     current_plate: Res<CurrentTextBoxBackground>,
     current_font: Res<'a, CurrentFont>,
     current_sub_state: Res<State<ChatControllerSubState>>,
+    ui_sounds: Res<UiSounds>,
+    ui_audio_player: Query<Entity, With<UiAudioPlayer>>,
     mut sub_state: ResMut<NextState<ChatControllerSubState>>,
 ) -> Result<(), BevyError> {
 
@@ -210,28 +233,45 @@ fn button_clicked_default_state<'a>(
 
     let entity = q_buttons.get(trigger.entity)
         .context("Clicked Entity does not have UiButtons declared")?;
-    match entity.1 {
+    let clicked = match entity.1 {
         UiButtons::OpenHistory => {
             warn!("Open history clicked");
             let history_panel_id = commands.spawn(history_panel(current_plate, &game_state, current_font.0.clone())?).id();
             commands.entity(*ui_root).add_child(history_panel_id);
             sub_state.set(ChatControllerSubState::History);
+            true
         },
         UiButtons::Rewind => {
             warn!("Rewind button clicked!");
             *info_text.0 = GUIScrollText::default();
             *message_text.0 = GUIScrollText::default();
             game_state.set_rewind();
+            true
         },
         UiButtons::TextBox => {
             warn!("Textbox history clicked");
             textbox_clicked(vncontainer_visibility, scroll_stopwatch, message_text, game_state);
+            false
         },
         UiButtons::InfoText => {
             warn!("Infotext container clicked");
             infotext_clicked(scroll_stopwatch, info_text, info_text_container_zidx, game_state);
+            false
         }
-        _ => {}
+        _ => { false }
+    };
+    
+    if clicked {
+        if let Some(sound) = &ui_sounds.0 {
+            if !ui_audio_player.is_empty() {
+                let entity = ui_audio_player.single().context("Unable to get ui audio player")?;
+                commands.entity(entity).despawn();
+            }
+            commands.spawn((
+                AudioPlayer::new(sound.clone()),
+                UiAudioPlayer
+            ));
+        }
     }
 
     Ok(())
@@ -502,6 +542,8 @@ fn update_ui(
     >,
     mut current_font: ResMut<CurrentFont>,
     font_registry: Res<FontRegistry>,
+    audios: Res<AudioResources>,
+    mut ui_sounds: ResMut<UiSounds>,
     mut q_fonts: Query<&mut TextFont>,
     concrete_images: Res<Assets<Image>>,
     gui_images: Res<UiImages>,
@@ -552,6 +594,11 @@ fn update_ui(
                 for mut font in &mut q_fonts {
                     font.font = current_font.0.clone();
                 }
+            },
+            UiChangeTarget::UiSounds => {
+                let sounds_id = ev.ui_sounds.clone().context("Missing ui sounds!")?;
+                let concrete_sound = audios.category("ui")?.get(&sounds_id).context(format!("Unable to find {} sound", sounds_id))?;
+                ui_sounds.0 = Some(concrete_sound.clone());
             }
         };
     }

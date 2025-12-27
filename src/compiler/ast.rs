@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 use crate::{
-    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, background::controller::{BackgroundDirection, BackgroundOperation}, chat::controller::{UiChangeTarget, UiImageMode}
+    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, audio::controller::AudioCommand, background::controller::{BackgroundDirection, BackgroundOperation}, chat::controller::{UiChangeTarget, UiImageMode}
 };
 
 #[derive(Parser)]
@@ -100,11 +100,18 @@ pub(crate) enum CodeStatement {
 #[derive(Debug, Clone)]
 pub(crate) enum StageCommand {
     BackgroundChange { operation: BackgroundOperation },
-    UiChange { ui_target: UiChangeTarget, target_font: Option<Box<Expr>>, sprite_expr: Option<Box<Expr>>, image_mode: Option<UiImageMode> },
+    UiChange {
+        ui_target: UiChangeTarget,
+        target_font: Option<Box<Expr>>,
+        sprite_expr: Option<Box<Expr>>,
+        image_mode: Option<UiImageMode>,
+        ui_sounds: Option<Box<Expr>>,
+    },
     SceneChange { scene_expr: Box<Expr> },
     ActChange { act_expr: Box<Expr> },
     CharacterChange { character: String, operation: ActorOperation },
     AnimationChange { animation: String, operation: ActorOperation },
+    AudioChange { command: AudioCommand, category: String, audio: String, volume: f32 },
 }
 
 #[derive(Debug, Clone)]
@@ -336,6 +343,7 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                 "textbox" => UiChangeTarget::TextBoxBackground,
                 "namebox" => UiChangeTarget::NameBoxBackground,
                 "font"    => UiChangeTarget::Font,
+                "ui sfx"  => UiChangeTarget::UiSounds,
                 other => bail!("Unknown UI element: {}", other)
             };
 
@@ -350,6 +358,20 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                         target_font: Some(Box::new(font_expr)),
                         sprite_expr: None,
                         image_mode: None,
+                        ui_sounds: None,
+                    }
+                },
+                UiChangeTarget::UiSounds => {
+                    let ui_sound_expr_pair = inner.next()
+                        .context("Ui font change missing target font")?;
+                    let ui_sound_expr = build_expression(ui_sound_expr_pair)
+                        .context("Failed to build font expression for UI change")?;
+                    StageCommand::UiChange {
+                        ui_target,
+                        target_font: None,
+                        sprite_expr: None,
+                        image_mode: None,
+                        ui_sounds: Some(Box::new(ui_sound_expr)),
                     }
                 },
                 _ => {
@@ -372,6 +394,7 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                         target_font: None,
                         sprite_expr: Some(Box::new(sprite_expr)),
                         image_mode,
+                        ui_sounds: None,
                     }
                 }
             }
@@ -432,6 +455,21 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                 Rule::actor_direction_directive => build_actor_direction_directive(ActorType::Animation, &animation, directive)?,
                 other => { return Err(anyhow::anyhow!("Unexpected directive! {:?}", other).into()); }
             }
+        },
+        Rule::audio_change => {
+            let mut inner_rules = command_pair.into_inner();
+            let command: AudioCommand = inner_rules.next().context("Could not get audio command")?.as_str().try_into()?;
+            let category = inner_rules.next().context("Could not get audio category")?.as_str().to_owned();
+            let audio = inner_rules.next().context("Could not get audio name")?.as_str().to_owned().trim().trim_matches('"').to_owned();
+            let volume = if let Some(def) = inner_rules.next() {
+                ensure!(def.as_rule() == Rule::audio_volume,
+                    "Expected audio volume, found {:?}", def.as_rule());
+                let mut volume_pairs = def.into_inner();
+                let value = volume_pairs.next().context("Volume value not found")?;
+                if value.as_str().contains(".") { value.as_str().parse::<f32>()? } else { value.as_str().parse::<i32>()? as f32 }
+            } else { 1. };
+            
+            StageCommand::AudioChange { command, category, audio, volume }
         }
         other => bail!("Unexpected rule in stage command: {:?}", other)
     };

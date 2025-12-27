@@ -160,3 +160,7 @@ We welcome contributions! Here are some areas where you can help:
 
 - Ui Panels (9 slice types) made by [BDragon1727](https://bdragon1727.itch.io/custom-border-and-panels-menu-all-part)
 - Fire animation made by [Devkidd](https://devkidd.itch.io/pixel-fire-asset-pack)
+- TypeWriter sound made by [kakaist](https://pixabay.com/users/kakaist-48093450/)
+- Background music made by [D-wheat music](https://d-wheat-music.itch.io/free-background-music-for-visual-novels-vol3)
+- Ui sounds made by [ConFuocoV](https://confuocov.itch.io/50-useme4free-digital-ui-sounds-sample-pack)
+- Fire sound made by [SoundReality](https://pixabay.com/users/soundreality-31074404/)

@@ -3,7 +3,9 @@ mod actor;
 mod chat;
 mod compiler;
 mod loader;
+mod audio;
 
+use crate::audio::controller::AudioController;
 use crate::background::*;
 use crate::actor::controller::ActorConfig;
 use crate::actor::controller::AnimationConfig;
@@ -191,7 +193,8 @@ impl Plugin for SabiPlugin {
                 Compiler,
                 BackgroundController,
                 CharacterController,
-                ChatController
+                ChatController,
+                AudioController,
             ));
     }
 }

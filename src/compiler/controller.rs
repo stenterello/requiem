@@ -1,4 +1,5 @@
 use crate::actor::ActorChangeMessage;
+use crate::audio::controller::AudioChangeMessage;
 use crate::chat::controller::InfoTextMessage;
 use crate::compiler::ast::Statement;
 use crate::compiler::calling::{Invoke, InvokeContext, SceneChangeMessage, ActChangeMessage};
@@ -28,6 +29,7 @@ struct ControllersReady {
     pub background_controller: bool,
     pub character_controller: bool,
     pub chat_controller: bool,
+    pub audio_controller: bool,
     pub compiler_controller: bool,
 }
 
@@ -36,6 +38,7 @@ impl ControllersReady {
         self.background_controller == true &&
         self.character_controller == true &&
         self.chat_controller == true &&
+        self.audio_controller == true &&
         self.compiler_controller == true
     }
     
@@ -59,6 +62,7 @@ pub enum Controller {
     Background,
     Character,
     Chat,
+    Audio,
 }
 
 /* Resources */
@@ -250,6 +254,7 @@ fn check_states(
             Controller::Background => &mut controllers_state.background_controller,
             Controller::Character => &mut controllers_state.character_controller,
             Controller::Chat => &mut controllers_state.chat_controller,
+            Controller::Audio => &mut controllers_state.audio_controller,
         };
         *controller = true;
     }
@@ -258,7 +263,7 @@ fn check_states(
     }
     Ok(())
 }
-fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h> (
+fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
     mut game_state: ResMut<'a, VisualNovelState>,
     mut character_say_message: MessageWriter<'b, CharacterSayMessage>,
     mut background_change_message: MessageWriter<'c, BackgroundChangeMessage>,
@@ -267,6 +272,7 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h> (
     mut act_change_message: MessageWriter<'f, ActChangeMessage>,
     mut character_change_message: MessageWriter<'g, ActorChangeMessage>,
     mut info_text_message: MessageWriter<'h, InfoTextMessage>,
+    mut audio_change_message: MessageWriter<'i, AudioChangeMessage>,
 
     mut state: ResMut<NextState<SabiState>>,
     mut ev_controller_writer: MessageWriter<ControllersSetStateMessage>,
@@ -311,6 +317,7 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h> (
                 act_change_message: &mut act_change_message,
                 actor_change_message: &mut character_change_message,
                 info_text_message: &mut info_text_message,
+                audio_change_message: &mut audio_change_message,
             })
             .context("Failed to invoke statement")?;
     } else {

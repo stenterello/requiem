@@ -1,3 +1,4 @@
+use crate::audio::controller::AudioChangeMessage;
 use crate::chat::controller::{InfoTextMessage, UiChangeTarget};
 use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, ActorChangeMessage, VisualNovelState};
 use crate::compiler::ast::{CodeStatement, Dialogue, Evaluate, InfoText, StageCommand, Statement, TextItem};
@@ -15,7 +16,7 @@ pub struct ActChangeMessage {
     pub act_id: String
 }
 
-pub struct InvokeContext<'l, 'a, 'b, 'd, 'e, 'f, 'g, 'h, 'i> {
+pub struct InvokeContext<'l, 'a, 'b, 'd, 'e, 'f, 'g, 'h, 'i, 'j> {
     pub game_state: &'l mut ResMut<'a, VisualNovelState>,
     pub character_say_message: &'l mut MessageWriter<'b, CharacterSayMessage>,
     pub background_change_message: &'l mut MessageWriter<'d, BackgroundChangeMessage>,
@@ -24,6 +25,7 @@ pub struct InvokeContext<'l, 'a, 'b, 'd, 'e, 'f, 'g, 'h, 'i> {
     pub act_change_message: &'l mut MessageWriter<'g, ActChangeMessage>,
     pub actor_change_message: &'l mut MessageWriter<'h, ActorChangeMessage>,
     pub info_text_message: &'l mut MessageWriter<'i, InfoTextMessage>,
+    pub audio_change_message: &'l mut MessageWriter<'j, AudioChangeMessage>,
 }
 pub trait Invoke {
     fn invoke ( &self, ctx: InvokeContext ) -> Result<()>;
@@ -75,11 +77,11 @@ impl Invoke for StageCommand {
                     operation: operation.clone(),
                 });
             },
-            StageCommand::UiChange { ui_target, target_font, sprite_expr, image_mode } => {
+            StageCommand::UiChange { ui_target, target_font, sprite_expr, image_mode, ui_sounds } => {
                 let ui_target = ui_target.clone();
                 let message = match ui_target {
                     UiChangeTarget::Font => {
-                        let target_font = target_font.clone().context("Target font empty")?;
+                        let target_font = target_font.clone().context("Target font field empty")?;
                         let target_font_str = target_font.evaluate_into_string()?;
                         info!("Invoking StageCommand::UiChange font to {}", target_font_str);
                         UiChangeMessage {
@@ -87,6 +89,19 @@ impl Invoke for StageCommand {
                             target_font: Some(target_font_str),
                             sprite_id: None,
                             image_mode: None,
+                            ui_sounds: None,
+                        }
+                    },
+                    UiChangeTarget::UiSounds => {
+                        let target_sound = ui_sounds.clone().context("ui_sounds field empty")?;
+                        let target_sound_str = target_sound.evaluate_into_string()?;
+                        info!("Invoking StageCommand::UiChange ui sounds to {}", target_sound_str);
+                        UiChangeMessage {
+                            ui_target,
+                            target_font: None,
+                            sprite_id: None,
+                            image_mode: None,
+                            ui_sounds: Some(target_sound_str),
                         }
                     },
                     _ => {
@@ -100,6 +115,7 @@ impl Invoke for StageCommand {
                             target_font: None,
                             sprite_id: Some(sprite_id),
                             image_mode,
+                            ui_sounds: None,
                         }
                     }
                 };
@@ -139,6 +155,11 @@ impl Invoke for StageCommand {
                     operation: operation.clone()
                 };
                 ctx.actor_change_message.write(message);
+            },
+            StageCommand::AudioChange { command, category, audio, volume } => {
+                info!("Invoking StageCommand::AudioChange command {:?} category {} audio {:?}", command, category, audio);
+                let message = AudioChangeMessage { command: command.clone(), category: category.clone(), audio: audio.clone(), volume: volume.clone() };
+                ctx.audio_change_message.write(message);
             }
         }
         

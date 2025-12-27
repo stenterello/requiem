@@ -1,0 +1,29 @@
+SCENE ui_settings
+    (set namebox to "NAMEBOX")
+    (set textbox to "nine_slice" sliced)
+    (Nayu appears)
+    Nayu: "Finally, we are supporting audio! I can already see it, in my mind..."
+    (start music "acoustic smile" volume 0.5)
+    Nayu: (happy) "All those beutiful VN scenes you are gonna write..."
+    Nayu: (happyspeaking) "...made even better by beautiful background musics, accompanying those wonderful words..."
+    (Animated "fire" appears right scale 3)
+    (pause music "acoustic smile")
+    Fire: "Nayu! Can you please stay focused? User is trying to understand how does this work!"
+    Nayu: (concerned) "Oh, Fire! You're right, here I am"
+    (unpause music "acoustic smile")
+    Nayu: "In Sabi we currently have three types of sounds: music, sfx, and ui. What you are now listening is 'music' one"
+    Nayu: "It is intended to be used as a background music, so we currently support only one instance of it"
+    Nayu: "You can operate on it with the commands 'start', 'stop', 'pause', 'unpause'. You can specify volume by add to the end of command 'volume val', where val is a value between 0.0 and 0.1"
+    (stop music "acoustic smile")
+    Fire: "Stop. It's my turn"
+    Fire: "Speaking of sfx sounds... They are sound to decorate your scene, giving it more touch and style."
+    (start sfx "fire")
+    Fire: "This one is among my favorites... What do you think?"
+    (stop sfx "fire")
+    (set ui sfx to "UISounds_023" volume 0.5)
+    Nayu: (neutral) "While you were occupied by your vanity, I prepared some UI sounds to improve user experience"
+    Fire: "You say so... But I can't hear anything..."
+    Nayu: "Sure, you are just an animated fire, those sounds can be triggered by the user pressing the ui buttons. Check it out!"
+    Fire: "Ok, you got me this time"
+    Nayu: (happyspeaking) "See you!"
+CURTAIN
