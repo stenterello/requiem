@@ -70,7 +70,7 @@ emotion_name = @{ ASCII_ALPHA+ }
 mc_identifier = { "MC" }
 narrator = { "info" }
 animation_identifier = { "Animated" ~ expr }
-ui_element = { "textbox" | "namebox" | "font" | "ui sfx" }
+ui_element = { "textbox" | "namebox" | "font" | "ui sfx" | "typing sound" }
 image_mode = { "sliced" | "auto" }
 actor_spawn_directive = {
                             "appears" |

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use anyhow::Context;
 use bevy::{asset::{LoadState, LoadedFolder}, prelude::*, time::Stopwatch};
+use bevy_audio::Volume;
 use bevy_ui_widgets::{Activate, UiWidgetsPlugins};
 
 use crate::{
@@ -34,6 +35,7 @@ pub(crate) struct UiChangeMessage {
     pub sprite_id: Option<String>,
     pub image_mode: Option<UiImageMode>,
     pub ui_sounds: Option<String>,
+    pub typing_sound: Option<String>,
 }
 
 /* States */
@@ -92,6 +94,8 @@ pub(crate) struct HistoryScrollbar;
 pub(crate) struct HistoryText;
 #[derive(Component)]
 pub(crate) struct UiAudioPlayer;
+#[derive(Component)]
+pub(crate) struct TypingAudioPlayer;
 
 /* Resources */
 #[derive(Resource)]
@@ -114,6 +118,8 @@ pub(crate) struct UiFolderLoaded(pub bool);
 pub(crate) struct FontsFolderLoaded(pub bool);
 #[derive(Resource, Default)]
 pub(crate) struct UiSounds(pub Option<Handle<AudioSource>>);
+#[derive(Resource, Default)]
+pub(crate) struct TypingSound(pub Option<Handle<AudioSource>>);
 
 /* Custom types */
 #[derive(Debug, Clone)]
@@ -122,6 +128,7 @@ pub(crate) enum UiChangeTarget {
     NameBoxBackground,
     Font,
     UiSounds,
+    TypingSound,
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) enum UiImageMode {
@@ -145,6 +152,7 @@ impl Plugin for ChatController {
             .insert_resource(UiFolderLoaded::default())
             .insert_resource(FontsFolderLoaded::default())
             .insert_resource(UiSounds::default())
+            .insert_resource(TypingSound::default())
             .init_state::<ChatControllerState>()
             .init_state::<ChatControllerSubState>()
             .add_systems(OnEnter(ChatControllerState::Loading), import_assets)
@@ -224,6 +232,7 @@ fn button_clicked_default_state<'a>(
     current_sub_state: Res<State<ChatControllerSubState>>,
     ui_sounds: Res<UiSounds>,
     ui_audio_player: Query<Entity, With<UiAudioPlayer>>,
+    q_typing_player: Query<&mut AudioSink, With<TypingAudioPlayer>>,
     mut sub_state: ResMut<NextState<ChatControllerSubState>>,
 ) -> Result<(), BevyError> {
 
@@ -250,7 +259,7 @@ fn button_clicked_default_state<'a>(
         },
         UiButtons::TextBox => {
             warn!("Textbox history clicked");
-            textbox_clicked(vncontainer_visibility, scroll_stopwatch, message_text, game_state);
+            textbox_clicked(vncontainer_visibility, scroll_stopwatch, message_text, &q_typing_player, game_state)?;
             false
         },
         UiButtons::InfoText => {
@@ -299,13 +308,18 @@ fn textbox_clicked(
     mut vncontainer_visibility: Single<&mut Visibility, (With<VNContainer>, Without<InfoTextContainer>, Without<InfoTextComponent>)>,
     mut scroll_stopwatch: ResMut<ChatScrollStopwatch>,
     message_text: Single<(&mut GUIScrollText, &mut Text), (With<MessageText>, Without<NameText>, Without<InfoTextComponent>)>,
+    q_typing_player: &Query<&mut AudioSink, With<TypingAudioPlayer>>,
     mut game_state: ResMut<VisualNovelState>,
-) {
+) -> Result<(), BevyError> {
     let length: u32 = (scroll_stopwatch.0.elapsed_secs() * 50.) as u32;
     if length < message_text.0.message.len() as u32 {
         // Skip message scrolling
         scroll_stopwatch.0.set_elapsed(std::time::Duration::from_secs_f32(100000000.));
-        return;
+        if !q_typing_player.is_empty() {
+            let player = q_typing_player.single().context("Unable to get typing player")?;
+            player.stop();
+        }
+        return Ok(());
     }
     println!("[ Player finished message ]");
 
@@ -314,6 +328,7 @@ fn textbox_clicked(
 
     // Allow transitions to be run again
     game_state.blocking = false;
+    Ok(())
 }
 fn setup(
     mut commands: Commands,
@@ -445,12 +460,15 @@ fn spawn_chatbox(
     Ok(())
 }
 fn update_chatbox(
+    mut commands: Commands,
     mut event_message: MessageReader<CharacterSayMessage>,
     vncontainer_visibility: Single<&mut Visibility, With<VNContainer>>,
     mut name_text: Single<&mut Text, (With<NameText>, Without<MessageText>)>,
     mut message_text: Single<(&mut GUIScrollText, &mut Text), (With<MessageText>, Without<NameText>)>,
     mut scroll_stopwatch: ResMut<ChatScrollStopwatch>,
     mut game_state: ResMut<VisualNovelState>,
+    typing_sound: Res<TypingSound>,
+    q_typing_player: Query<Entity, With<TypingAudioPlayer>>,
     time: Res<Time>,
 ) -> Result<(), BevyError> {
     // Tick clock
@@ -470,6 +488,21 @@ fn update_chatbox(
         name_text.0 = name;
         println!("MESSAGE {}", ev.message);
         message_text.0.message = ev.message.clone();
+        if let Some(sound) = &typing_sound.0 {
+            if !q_typing_player.is_empty() {
+                let entity = q_typing_player.single().context("Unable to retrieve Typing audio player")?;
+                commands.entity(entity).despawn();
+            }
+            let playback_settings = PlaybackSettings {
+                // volume: Volume::Linear(msg.volume),
+                ..default()
+            };
+            commands.spawn((
+                AudioPlayer::new(sound.clone()),
+                playback_settings,
+                TypingAudioPlayer
+            ));
+        }
     }
 
     // If vn container is hidden, ignore the next section dedicated to updating it
@@ -481,10 +514,20 @@ fn update_chatbox(
     let mut original_string: String = message_text.0.message.clone();
 
     // Get the section of the string according to the elapsed time
-    let length: u32 = (scroll_stopwatch.0.elapsed_secs() * 50.) as u32;
+    let length: usize = (scroll_stopwatch.0.elapsed_secs() * 50.) as usize;
+    
+    info!("messagetextlen {}, originalstringlen {}", length, original_string.len());
+    if length == original_string.len() {
+        if let Some(_) = &typing_sound.0 {
+            if !q_typing_player.is_empty() {
+                let entity = q_typing_player.single().context("Unable to retrieve Typing audio player")?;
+                commands.entity(entity).despawn();
+            }
+        }
+    }
 
     // Return the section and apply it to the text object
-    original_string.truncate(length as usize);
+    original_string.truncate(length);
     message_text.1.0 = original_string;
 
     Ok(())
@@ -544,6 +587,7 @@ fn update_ui(
     font_registry: Res<FontRegistry>,
     audios: Res<AudioResources>,
     mut ui_sounds: ResMut<UiSounds>,
+    mut typing_sound: ResMut<TypingSound>,
     mut q_fonts: Query<&mut TextFont>,
     concrete_images: Res<Assets<Image>>,
     gui_images: Res<UiImages>,
@@ -599,6 +643,11 @@ fn update_ui(
                 let sounds_id = ev.ui_sounds.clone().context("Missing ui sounds!")?;
                 let concrete_sound = audios.category("ui")?.get(&sounds_id).context(format!("Unable to find {} sound", sounds_id))?;
                 ui_sounds.0 = Some(concrete_sound.clone());
+            },
+            UiChangeTarget::TypingSound => {
+                let sounds_id = ev.typing_sound.clone().context("Missing typing sound!")?;
+                let concrete_sound = audios.category("ui")?.get(&sounds_id).context(format!("Unable to find {} sound", sounds_id))?;
+                typing_sound.0 = Some(concrete_sound.clone());
             }
         };
     }

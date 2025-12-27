@@ -77,7 +77,7 @@ impl Invoke for StageCommand {
                     operation: operation.clone(),
                 });
             },
-            StageCommand::UiChange { ui_target, target_font, sprite_expr, image_mode, ui_sounds } => {
+            StageCommand::UiChange { ui_target, target_font, sprite_expr, image_mode, ui_sounds, typing_sound } => {
                 let ui_target = ui_target.clone();
                 let message = match ui_target {
                     UiChangeTarget::Font => {
@@ -90,6 +90,7 @@ impl Invoke for StageCommand {
                             sprite_id: None,
                             image_mode: None,
                             ui_sounds: None,
+                            typing_sound: None,
                         }
                     },
                     UiChangeTarget::UiSounds => {
@@ -102,6 +103,20 @@ impl Invoke for StageCommand {
                             sprite_id: None,
                             image_mode: None,
                             ui_sounds: Some(target_sound_str),
+                            typing_sound: None,
+                        }
+                    },
+                    UiChangeTarget::TypingSound => {
+                        let target_sound = typing_sound.clone().context("typing field empty")?;
+                        let target_sound_str = target_sound.evaluate_into_string()?;
+                        info!("Invoking StageCommand::UiChange typing sound to {}", target_sound_str);
+                        UiChangeMessage {
+                            ui_target,
+                            target_font: None,
+                            sprite_id: None,
+                            image_mode: None,
+                            ui_sounds: None,
+                            typing_sound: Some(target_sound_str),
                         }
                     },
                     _ => {
@@ -116,6 +131,7 @@ impl Invoke for StageCommand {
                             sprite_id: Some(sprite_id),
                             image_mode,
                             ui_sounds: None,
+                            typing_sound: None,
                         }
                     }
                 };

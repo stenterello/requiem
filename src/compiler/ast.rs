@@ -106,6 +106,7 @@ pub(crate) enum StageCommand {
         sprite_expr: Option<Box<Expr>>,
         image_mode: Option<UiImageMode>,
         ui_sounds: Option<Box<Expr>>,
+        typing_sound: Option<Box<Expr>>,
     },
     SceneChange { scene_expr: Box<Expr> },
     ActChange { act_expr: Box<Expr> },
@@ -340,10 +341,11 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
 
             // Convert ui_element to the appropriate ID
             let ui_target = match gui_element_pair.as_str() {
-                "textbox" => UiChangeTarget::TextBoxBackground,
-                "namebox" => UiChangeTarget::NameBoxBackground,
-                "font"    => UiChangeTarget::Font,
-                "ui sfx"  => UiChangeTarget::UiSounds,
+                "textbox"      => UiChangeTarget::TextBoxBackground,
+                "namebox"      => UiChangeTarget::NameBoxBackground,
+                "font"         => UiChangeTarget::Font,
+                "ui sfx"       => UiChangeTarget::UiSounds,
+                "typing sound" => UiChangeTarget::TypingSound,
                 other => bail!("Unknown UI element: {}", other)
             };
 
@@ -359,20 +361,36 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                         sprite_expr: None,
                         image_mode: None,
                         ui_sounds: None,
+                        typing_sound: None,
                     }
                 },
                 UiChangeTarget::UiSounds => {
                     let ui_sound_expr_pair = inner.next()
-                        .context("Ui font change missing target font")?;
+                        .context("Ui sound change missing ui sounds")?;
                     let ui_sound_expr = build_expression(ui_sound_expr_pair)
-                        .context("Failed to build font expression for UI change")?;
+                        .context("Failed to build ui sound expression for UI change")?;
                     StageCommand::UiChange {
                         ui_target,
                         target_font: None,
                         sprite_expr: None,
                         image_mode: None,
                         ui_sounds: Some(Box::new(ui_sound_expr)),
+                        typing_sound: None,
                     }
+                },
+                UiChangeTarget::TypingSound => {
+                    let typing_sound_expr_pair = inner.next()
+                        .context("Ui change missing typing name")?;
+                    let typing_sound_expr = build_expression(typing_sound_expr_pair)
+                        .context("Failed to build typing expression for UI change")?;
+                    StageCommand::UiChange {
+                            ui_target,
+                            target_font: None,
+                            sprite_expr: None,
+                            image_mode: None,
+                            ui_sounds: None,
+                            typing_sound: Some(Box::new(typing_sound_expr)),
+                        }
                 },
                 _ => {
                     let sprite_expr_pair = inner.next()
@@ -395,6 +413,7 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                         sprite_expr: Some(Box::new(sprite_expr)),
                         image_mode,
                         ui_sounds: None,
+                        typing_sound: None,
                     }
                 }
             }

@@ -1,10 +1,11 @@
 SCENE ui_settings
     (set namebox to "NAMEBOX")
     (set textbox to "nine_slice" sliced)
+    (set typing sound to "typewriter")
     (Nayu appears)
     Nayu: "Finally, we are supporting audio! I can already see it, in my mind..."
-    (start music "acoustic smile" volume 0.5)
     Nayu: (happy) "All those beutiful VN scenes you are gonna write..."
+    (start music "acoustic smile" volume 0.5)
     Nayu: (happyspeaking) "...made even better by beautiful background musics, accompanying those wonderful words..."
     (Animated "fire" appears right scale 3)
     (pause music "acoustic smile")
