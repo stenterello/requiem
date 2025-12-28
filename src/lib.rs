@@ -37,48 +37,54 @@ impl VariantKind for ast::Statement {
             Statement::Stage(s) => {
                 match s {
                     StageCommand::ActChange        { .. } => { 2 },
-                    StageCommand::AnimationChange  { .. } => { 3 },
+                    StageCommand::AnimationChange { operation, .. } => {
+                        match operation {
+                            ActorOperation::Spawn(_) |
+                            ActorOperation::Despawn(_) => { 3 },
+                            _ => { 4 }
+                        }
+                    },
                     StageCommand::AudioChange { command, category, .. } => {
                         match (command, category.as_str()) {
                             (AudioCommand::Start,   "music") |
-                            (AudioCommand::Stop,    "music")   => { 4 },
+                            (AudioCommand::Stop,    "music")   => { 5 },
                             (AudioCommand::Pause,   "music") |
-                            (AudioCommand::Unpause, "music")   => { 5 },
+                            (AudioCommand::Unpause, "music")   => { 6 },
                             (AudioCommand::Start,   "sfx") |
-                            (AudioCommand::Stop,    "sfx")     => { 6 },
+                            (AudioCommand::Stop,    "sfx")     => { 7 },
                             (AudioCommand::Pause,   "sfx") |
-                            (AudioCommand::Unpause, "sfx")     => { 7 },
-                            _                                  => { 8 },
+                            (AudioCommand::Unpause, "sfx")     => { 8 },
+                            _                                  => { 9 },
                         }
                     },
-                    StageCommand::BackgroundChange { .. } => { 9 },
-                    StageCommand::CharacterChange  { .. } => { 10 },
-                    StageCommand::SceneChange      { .. } => { 11 },
+                    StageCommand::BackgroundChange { .. } => { 10 },
+                    StageCommand::CharacterChange  { .. } => { 11 },
+                    StageCommand::SceneChange      { .. } => { 12 },
                     StageCommand::UiChange         { command } => {
                         match command {
                             ast::UiChangeCommand::Set { target_element, .. } => {
                                 match target_element {
-                                    UiChangeTarget::Font              => { 12 },
-                                    UiChangeTarget::TextBoxBackground => { 13 },
-                                    UiChangeTarget::NameBoxBackground => { 14 },
-                                    UiChangeTarget::TypingSound       => { 15 },
-                                    UiChangeTarget::UiSounds          => { 16 },
+                                    UiChangeTarget::Font              => { 13 },
+                                    UiChangeTarget::TextBoxBackground => { 14 },
+                                    UiChangeTarget::NameBoxBackground => { 15 },
+                                    UiChangeTarget::TypingSound       => { 16 },
+                                    UiChangeTarget::UiSounds          => { 17 },
                                 }
                             },
                             ast::UiChangeCommand::Unset { target_element } => {
                                 match target_element {
-                                    UiChangeTarget::Font              => { 12 },
-                                    UiChangeTarget::TextBoxBackground => { 13 },
-                                    UiChangeTarget::NameBoxBackground => { 14 },
-                                    UiChangeTarget::TypingSound       => { 15 },
-                                    UiChangeTarget::UiSounds          => { 16 },
+                                    UiChangeTarget::Font              => { 13 },
+                                    UiChangeTarget::TextBoxBackground => { 14 },
+                                    UiChangeTarget::NameBoxBackground => { 15 },
+                                    UiChangeTarget::TypingSound       => { 16 },
+                                    UiChangeTarget::UiSounds          => { 17 },
                                 }
                             }
                         }
                     },
                 }
             }
-            Statement::Code(_)     => 17,
+            Statement::Code(_)     => 18,
         }
     }
 }
