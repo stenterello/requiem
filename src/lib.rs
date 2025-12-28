@@ -133,14 +133,35 @@ impl VisualNovelState {
         }
         let search_slice = &self.history[..self.history.len() - 1];
         let last_d = search_slice.iter().rposition(|s| {
-            info!("s {:?}", s);
             matches!(s, Statement::TextItem(TextItem::Dialogue(_)))
         });
-        if let Some(index) = last_d {
-            self.rewinding = self.history.len() - (index + 1);
-            self.blocking = false;
-            Ok(())
-        } else { return Err(anyhow::anyhow!("No previous valid statement").into()); }
+        let is_other_scene = search_slice.iter().rposition(|s| {
+            matches!(s, Statement::Stage(StageCommand::SceneChange { .. })) ||
+            matches!(s, Statement::Stage(StageCommand::ActChange { .. }))
+        });
+        // Notice: control over is_other_scene is needed since we don't handle 
+        // rewinding system which goes back to a previous scene. 
+        // With this control, we prevent stall.
+        // Of course, it should be deleted as soon as we have the functionality
+        match (last_d, is_other_scene) {
+            (Some(index), Some(other_scene)) => {
+                if index < other_scene {
+                    return Err(anyhow::anyhow!("No previous valid statement").into());
+                } else {
+                    self.rewinding = self.history.len() - (index + 1);
+                    self.blocking = false;
+                    Ok(())
+                }
+            },
+            (Some(index), None) => {
+                self.rewinding = self.history.len() - (index + 1);
+                self.blocking = false;
+                Ok(())
+            },
+            (None, _) => {
+                return Err(anyhow::anyhow!("No previous valid statement").into());
+            }
+        }
     }
 
     pub fn history_summary(&self) -> Result<Vec<String>> {
