@@ -244,10 +244,15 @@ fn button_clicked_history_state(
 fn button_clicked_default_state<'a>(
     trigger: On<Activate>,
     mut commands: Commands,
-    vncontainer_visibility: Single<&mut Visibility, (With<VNContainer>, Without<InfoTextContainer>, Without<InfoTextComponent>)>,
+    mut q_visibilities: Query<(
+        &mut Visibility,
+        Option<&VNContainer>,
+        Option<&NameBoxBackground>,
+        Option<&InfoTextComponent>,
+    )>,
     scroll_stopwatch: ResMut<ChatScrollStopwatch>,
     mut message_text: Single<(&mut GUIScrollText, &mut Text), (With<MessageText>, Without<NameText>, Without<InfoTextComponent>)>,
-    mut info_text: Single<(&mut GUIScrollText, &mut Text, &mut Visibility), (With<InfoTextComponent>, Without<NameText>, Without<MessageText>, Without<VNContainer>)>,
+    mut info_text: Single<(&mut GUIScrollText, &mut Text), (With<InfoTextComponent>, Without<NameText>, Without<MessageText>, Without<VNContainer>)>,
     info_text_container_zidx: Single<&mut ZIndex, (With<InfoTextContainer>, Without<VNContainer>)>,
     mut game_state: ResMut<VisualNovelState>,
     ui_root: Single<Entity, With<UiRoot>>,
@@ -263,6 +268,15 @@ fn button_clicked_default_state<'a>(
 
     if *current_sub_state != ChatControllerSubState::Default {
         return Ok(())
+    }
+    
+    let mut vn_vis = None;
+    let mut name_vis = None;
+    let mut info_vis = None;
+    for (vis, is_vn, is_namebox, is_info) in q_visibilities.iter_mut() {
+        if is_vn.is_some() { vn_vis = Some(vis); }
+        else if is_namebox.is_some() { name_vis = Some(vis); }
+        else if is_info.is_some() { info_vis = Some(vis); }
     }
 
     let entity = q_buttons.get(trigger.entity)
@@ -285,12 +299,17 @@ fn button_clicked_default_state<'a>(
         },
         UiButtons::TextBox => {
             warn!("Textbox history clicked");
-            textbox_clicked(vncontainer_visibility, scroll_stopwatch, message_text, &q_typing_player, game_state)?;
+            match (&mut vn_vis, &mut name_vis) {
+                (Some(vn_v), Some(name_v)) => textbox_clicked(vn_v, name_v, scroll_stopwatch, message_text, &q_typing_player, game_state)?,
+                _ => { return Err(anyhow::anyhow!("Error on elements visibility!").into()) }
+            }
             false
         },
         UiButtons::InfoText => {
             warn!("Infotext container clicked");
-            infotext_clicked(scroll_stopwatch, info_text, info_text_container_zidx, game_state);
+            if let Some(i_vis) = &mut info_vis {
+                infotext_clicked(scroll_stopwatch, info_text, i_vis, info_text_container_zidx, game_state);
+            }
             false
         }
         _ => { false }
@@ -313,12 +332,13 @@ fn button_clicked_default_state<'a>(
 }
 fn infotext_clicked(
     mut scroll_stopwatch: ResMut<ChatScrollStopwatch>,
-    mut info_text: Single<(&mut GUIScrollText, &mut Text, &mut Visibility), (With<InfoTextComponent>, Without<NameText>, Without<MessageText>, Without<VNContainer>)>,
+    info_text_data: Single<(&mut GUIScrollText, &mut Text), (With<InfoTextComponent>, Without<NameText>, Without<MessageText>, Without<VNContainer>)>,
+    info_visibility: &mut Visibility,
     mut container_zidx: Single<&mut ZIndex, (With<InfoTextContainer>, Without<VNContainer>)>,
     mut game_state: ResMut<VisualNovelState>,
 ) {
     let length: u32 = (scroll_stopwatch.0.elapsed_secs() * 25.) as u32;
-    if length < info_text.0.message.len() as u32 {
+    if length < info_text_data.0.message.len() as u32 {
         // Skip message scrolling
         scroll_stopwatch.0.set_elapsed(std::time::Duration::from_secs_f32(100000000.));
         return;
@@ -327,11 +347,12 @@ fn infotext_clicked(
 
     // Allow transitions to be run again
     game_state.blocking = false;
-    *info_text.2 = Visibility::Hidden;
+    *info_visibility = Visibility::Hidden;
     **container_zidx = ZIndex(INFOTEXT_Z_INDEX_INACTIVE);
 }
 fn textbox_clicked(
-    mut vncontainer_visibility: Single<&mut Visibility, (With<VNContainer>, Without<InfoTextContainer>, Without<InfoTextComponent>)>,
+    vncontainer_visibility: &mut Visibility,
+    namebox_visibility: &mut Visibility,
     mut scroll_stopwatch: ResMut<ChatScrollStopwatch>,
     message_text: Single<(&mut GUIScrollText, &mut Text), (With<MessageText>, Without<NameText>, Without<InfoTextComponent>)>,
     q_typing_player: &Query<&mut AudioSink, With<TypingAudioPlayer>>,
@@ -350,7 +371,8 @@ fn textbox_clicked(
     println!("[ Player finished message ]");
 
     // Hide textbox parent object
-    **vncontainer_visibility = Visibility::Hidden;
+    *vncontainer_visibility = Visibility::Hidden;
+    *namebox_visibility = Visibility::Hidden;
 
     // Allow transitions to be run again
     game_state.blocking = false;
