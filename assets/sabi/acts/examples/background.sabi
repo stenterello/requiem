@@ -1,5 +1,5 @@
 SCENE background_example
-    (set textbox to "test" sliced)
+    (set textbox to "nine_slice" sliced)
     (set namebox to "NAMEBOX")
     Nayu: "In Sabi there is a dedicated module to handle background operations."
     (Background changes to "main_classroom_day")
