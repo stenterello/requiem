@@ -292,9 +292,7 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
                 Some(Statement::TextItem(item))
             }
             Some(Statement::Stage(stm)) => {
-                info!("searching previous {:?}", stm);
                 let prev = game_state.statements.find_previous();
-                info!("item found {:?}", prev);
                 if let Some(s) = prev {
                     Some(s.undo_statement())
                 } else {
@@ -315,28 +313,11 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
     } else {
         let next_statement = game_state.statements.next();
         if let Some(stm) = &next_statement {
-            // let to_save = match stm {
-            //     Statement::Stage(s) => {
-            //         match s {
-            //             ast::StageCommand::BackgroundChange { operation } => {
-            //                 if matches!(operation, BackgroundOperation::SlideTo(_)) {
-            //                     false
-            //                 } else { true }
-            //             },
-            //             _ => true
-            //         }
-            //     },
-            //     _ => true
-            // };
-            // if to_save {
-                game_state.history.push(stm.clone());
-            // }
+            game_state.history.push(stm.clone());
         }
         next_statement
     };
     
-    info!("HISTORY {:#?}", game_state.history);
-
     if let Some(statement) = next_statement {
         statement.invoke(InvokeContext {
                 game_state: &mut game_state,
@@ -368,7 +349,6 @@ fn handle_scene_changes(
             .context(format!("Scene '{}' not found in current act", msg.scene_id))?
             .clone();
 
-        info!("Changing to scene: {}", msg.scene_id);
         game_state.scene = new_scene.clone();
         game_state.statements = Cursor::new(game_state.scene.statements.clone());
         game_state.blocking = false;
@@ -388,8 +368,6 @@ fn handle_act_changes(
         current_script.0.act = msg.act_id.clone();
         let act_handle = scripts_resource.0.get(&current_script.0).context(format!("Could not find act handle for {}", current_script.0.act))?;
         let act = scripts_assets.get(act_handle).context(format!("Could not find act {:?}", act_handle))?;
-
-        info!("Changing to act: {}", current_script.0.act);
 
         let entrypoint_scene = act.scenes.get(&act.entrypoint)
             .context(format!("Entrypoint scene '{}' not found in act '{}'", act.entrypoint, current_script.0.act))?
