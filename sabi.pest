@@ -54,7 +54,7 @@ text_item = { dialogue | infotext }
 infotext = { narrator ~ ": " ~ expr }
 
 // Makes a character or the MC or anonymous say something
-dialogue = { dialogue_speaker? ~ expr ~ (expr | stage_command)* }
+dialogue = { dialogue_speaker? ~ expr }
 dialogue_emotion_change = { "(" ~ emotion_name ~ ")" }
 dialogue_speaker = { (character_identifier ~ ": " ~ dialogue_emotion_change?) }
 
