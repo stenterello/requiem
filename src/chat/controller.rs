@@ -420,6 +420,7 @@ fn setup(
                     }
 
                     let default_handle = fonts.get("ALLER").context("Default font ALLER is not present")?.clone();
+                    commands.insert_resource(DefaultFont(default_handle.clone()));
                     commands.insert_resource(CurrentFont(default_handle));
                     commands.insert_resource(FontRegistry(fonts));
                 },
