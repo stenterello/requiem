@@ -207,7 +207,11 @@ impl VisualNovelState {
                 Statement::TextItem(t) => {
                     match t {
                         TextItem::Dialogue(d) => {
-                            text.push(d.character.clone() + format!(": {}\n", d.dialogue.evaluate_into_string()?).as_str());
+                            if let Some(c) = &d.character {
+                                text.push(c.clone() + format!(": {}\n", d.dialogue.evaluate_into_string()?).as_str());
+                            } else {
+                                text.push(format!(": {}\n", d.dialogue.evaluate_into_string()?));
+                            }
                         },
                         TextItem::InfoText(i) => {
                             text.push(i.infotext.evaluate_into_string()? + "\n");

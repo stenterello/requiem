@@ -20,7 +20,7 @@ const UI_FONTS_PATH: &str = "sabi/fonts";
 /* Messages */
 #[derive(Message)]
 pub(crate) struct CharacterSayMessage {
-    pub name: String,
+    pub name: Option<String>,
     pub message: String
 }
 #[derive(Message)]
@@ -489,7 +489,8 @@ fn spawn_chatbox(
 fn update_chatbox(
     mut commands: Commands,
     mut event_message: MessageReader<CharacterSayMessage>,
-    vncontainer_visibility: Single<&mut Visibility, With<VNContainer>>,
+    vncontainer_visibility: Single<&mut Visibility, (With<VNContainer>, Without<NameBoxBackground>)>,
+    mut namebox_visibility: Single<&mut Visibility, (With<NameBoxBackground>, Without<VNContainer>)>,
     mut name_text: Single<&mut Text, (With<NameText>, Without<MessageText>)>,
     mut message_text: Single<(&mut GUIScrollText, &mut Text), (With<MessageText>, Without<NameText>)>,
     mut scroll_stopwatch: ResMut<ChatScrollStopwatch>,
@@ -511,9 +512,15 @@ fn update_chatbox(
         // Reset the scrolling timer
         scroll_stopwatch.0.set_elapsed(std::time::Duration::from_secs_f32(0.));
         // Update the name
-        let name = if ev.name == "[_PLAYERNAME_]" { game_state.playername.clone() } else { ev.name.clone() };
-        name_text.0 = name;
-        println!("MESSAGE {}", ev.message);
+        if let Some(name) = &ev.name {
+            let result = if name == "[_PLAYERNAME_]" { game_state.playername.clone() } else { name.clone() };
+            name_text.0 = result;
+            **namebox_visibility = Visibility::Visible;
+        } else {
+            **namebox_visibility = Visibility::Hidden;
+        };
+        
+        info!("MESSAGE {}", ev.message);
         message_text.0.message = ev.message.clone();
         if let Some(sound) = &typing_sound.0 {
             if q_typing_player.is_empty() {

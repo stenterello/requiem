@@ -3,7 +3,7 @@ SCENE basic_startup
     (set namebox to "NAMEBOX")
     (Background changes to "main_classroom_noon")
     (Nayu appears concerned)
-    MC: "Welcome to Sabi! A Visual Novel engine written in Rust and Bevy."
+    "Welcome to Sabi! A Visual Novel engine written in Rust and Bevy."
     Nayu: (neutral) "This is the intro scene."
     Nayu: "You're viewing the 'basic_startup' example."
     Nayu: "Check the other examples to dive in into Sabi library."

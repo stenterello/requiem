@@ -146,7 +146,7 @@ pub(crate) struct InfoText {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Dialogue {
-    pub character: String,
+    pub character: Option<String>,
     pub dialogue: Expr
 }
 
@@ -580,48 +580,62 @@ pub fn build_dialogue(pair: Pair<Rule>) -> Result<Vec<Statement>> {
         "Expected dialogue, found {:?}", pair.as_rule());
 
     let mut inner_rules = pair.into_inner().peekable();
-
-    let character = inner_rules.next()
-        .context("Dialogue missing character identifier")?
-        .as_str()
-        .to_owned();
-
-    let emotion_statement = match inner_rules.peek() {
-        Some(n) if n.as_rule() == Rule::dialogue_emotion_change => {
-            let emotion_pair = inner_rules.next()
-                .context("Expected emotion pair")?;
-            let emotion_name_pair = emotion_pair.into_inner().next()
-                .context("Emotion change missing emotion name")?;
-
-            ensure!(emotion_name_pair.as_rule() == Rule::emotion_name,
-                "Expected emotion name, found {:?}", emotion_name_pair.as_rule());
-
-            Some(Statement::Stage(StageCommand::CharacterChange {
-                character: character.clone(),
-                operation: ActorOperation::EmotionChange(emotion_name_pair.as_str().to_owned())
-            }))
+    let initial_rule = inner_rules.next().context("Dialogue missing first parameter")?;
+    
+    let (character, emotion, dialogue): (Option<String>, Option<Statement>, Expr) = match initial_rule.as_rule() {
+        Rule::dialogue_speaker => {
+            let mut speaker_rules = initial_rule.into_inner();
+            let character = speaker_rules.next()
+                .context("Dialogue missing character identifier")?
+                .as_str()
+                .to_owned();
+        
+            let emotion_statement = match speaker_rules.peek() {
+                Some(n) if n.as_rule() == Rule::dialogue_emotion_change => {
+                    let emotion_pair = speaker_rules.next()
+                        .context("Expected emotion pair")?;
+                    let emotion_name_pair = emotion_pair.into_inner().next()
+                        .context("Emotion change missing emotion name")?;
+        
+                    ensure!(emotion_name_pair.as_rule() == Rule::emotion_name,
+                        "Expected emotion name, found {:?}", emotion_name_pair.as_rule());
+                    
+        
+                    Some(Statement::Stage(StageCommand::CharacterChange {
+                        character: character.clone(),
+                        operation: ActorOperation::EmotionChange(emotion_name_pair.as_str().to_owned())
+                    }))
+                },
+                _ => None
+            };
+            
+            let dialogue_text_pair = inner_rules.next()
+                .context("Dialogue missing dialogue text")?;
+            ensure!(dialogue_text_pair.as_rule() == Rule::expr,
+                "Expected dialogue text, found {:?}", dialogue_text_pair.as_rule());
+    
+            let dialogue = build_expression(dialogue_text_pair)
+                .context("Failed to build expression for dialogue text")?;
+            
+            (Some(character), emotion_statement, dialogue)
         },
-        _ => None
+        Rule::expr => {
+            let dialogue = build_expression(initial_rule)
+                .context("Failed to build expression for dialogue text")?;
+            
+            (None, None, dialogue)
+        },
+        other => { return Err(anyhow::anyhow!("Unexpected rule {:?}", other).into()) }
     };
-
-    let initial_dialogue_statement = {
-        let dialogue_text_pair = inner_rules.next()
-            .context("Dialogue missing dialogue text")?;
-        ensure!(dialogue_text_pair.as_rule() == Rule::expr,
-            "Expected dialogue text, found {:?}", dialogue_text_pair.as_rule());
-
-        let dialogue = build_expression(dialogue_text_pair)
-            .context("Failed to build expression for dialogue text")?;
-
-        Statement::TextItem(TextItem::Dialogue(Dialogue  {
-            character: character.clone(),
-            dialogue
-        }))
-    };
+    
+    let initial_dialogue_statement = Statement::TextItem(TextItem::Dialogue(Dialogue {
+        character: character.clone(),
+        dialogue
+    }));
 
     let statements = {
         let mut statements = vec!(initial_dialogue_statement);
-        if let Some(emotion_stmt) = emotion_statement {
+        if let Some(emotion_stmt) = emotion {
             statements.insert(0, emotion_stmt);
         }
 
