@@ -5,7 +5,20 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 use crate::{
-    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, audio::controller::AudioCommand, background::{BackgroundChangeMessage, controller::{BackgroundDirection, BackgroundOperation}}, chat::controller::{UiChangeTarget, UiImageMode}
+    actor::{
+        ActorOperation,
+        controller::{
+            ActorDirection,
+            ActorPosition,
+            ActorType,
+            AnimationPosition,
+            CharacterPosition,
+            SpawnInfo
+        }
+    },
+    audio::controller::AudioCommand,
+    background::controller::{BackgroundDirection, BackgroundOperation},
+    chat::controller::{UiChangeTarget, UiImageMode}
 };
 
 #[derive(Parser)]

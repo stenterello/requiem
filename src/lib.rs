@@ -90,11 +90,14 @@ impl<T> Cursor<T> {
     where
         T: Clone + VariantKind
     {
+        info!("self.pos is {}", self.pos);
         if let Some(item) = self.data.get(self.pos as usize) {
             let current_kind = item.kind();
+            info!("current kind {current_kind}");
             let mut idx: i32 = self.pos as i32 - 1;
             while idx >= 0 {
                 if let Some(back_item) = self.data.get(idx as usize) {
+                    info!("kind {}", back_item.kind());
                     if back_item.kind() == current_kind {
                         return Some(back_item.clone());
                     }
@@ -120,13 +123,7 @@ pub(crate) struct VisualNovelState {
     pub statements: Cursor<ast::Statement>,
     blocking: bool,
     pub rewinding: usize,
-    pub history: Vec<HistoryItem>,
-}
-
-#[derive(Debug)]
-pub(crate) enum HistoryItem {
-    Statement(ast::Statement),
-    Descriptor(String),
+    pub history: Vec<ast::Statement>,
 }
 
 impl VisualNovelState {
@@ -136,12 +133,8 @@ impl VisualNovelState {
         }
         let search_slice = &self.history[..self.history.len() - 1];
         let last_d = search_slice.iter().rposition(|s| {
-            info!("s {:?}",s);
-            if let HistoryItem::Statement(stm) = s {
-                matches!(stm, Statement::TextItem(TextItem::Dialogue(_)))
-            } else {
-                false
-            }
+            info!("s {:?}", s);
+            matches!(s, Statement::TextItem(TextItem::Dialogue(_)))
         });
         if let Some(index) = last_d {
             self.rewinding = self.history.len() - (index + 1);
@@ -155,21 +148,23 @@ impl VisualNovelState {
 
         for statement in &self.history {
             match statement {
-                HistoryItem::Statement(s) => {
-                    if let Statement::TextItem(t) = s {
-                        match t {
-                            TextItem::Dialogue(d) => {
-                                text.push(d.character.clone() + format!(": {}\n", d.dialogue.evaluate_into_string()?).as_str());
-                            },
-                            TextItem::InfoText(i) => {
-                                text.push(i.infotext.evaluate_into_string()? + "\n");
-                            }
+                Statement::TextItem(t) => {
+                    match t {
+                        TextItem::Dialogue(d) => {
+                            text.push(d.character.clone() + format!(": {}\n", d.dialogue.evaluate_into_string()?).as_str());
+                        },
+                        TextItem::InfoText(i) => {
+                            text.push(i.infotext.evaluate_into_string()? + "\n");
                         }
                     }
-                }
-                HistoryItem::Descriptor(s) => {
-                    text.push(s.clone() + "\n");
-                }
+                },
+                Statement::Stage(StageCommand::SceneChange { scene_expr }) => {
+                    text.push(format!("\nScene: {}\n", scene_expr.evaluate_into_string()?));
+                },
+                Statement::Stage(StageCommand::ActChange { act_expr }) => {
+                    text.push(format!("\nAct: {}\n", act_expr.evaluate_into_string()?));
+                },
+                _ => {}
             }
         }
 
@@ -179,11 +174,7 @@ impl VisualNovelState {
     fn text_before(&self) -> bool {
         let search_slice = &self.history[..self.history.len() - 1];
         let last_d = search_slice.iter().rposition(|s| {
-            if let HistoryItem::Statement(stm) = s {
-                matches!(stm, Statement::TextItem(TextItem::Dialogue(_)))
-            } else {
-                false
-            }
+            matches!(s, Statement::TextItem(TextItem::Dialogue(_)))
         });
         last_d.is_some()
     }

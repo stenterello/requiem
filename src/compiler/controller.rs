@@ -2,9 +2,9 @@ use crate::actor::ActorChangeMessage;
 use crate::audio::controller::AudioChangeMessage;
 use crate::background::controller::BackgroundOperation;
 use crate::chat::controller::InfoTextMessage;
-use crate::compiler::ast::{Statement, UndoableStatement};
+use crate::compiler::ast::{StageCommand, Statement, UndoableStatement};
 use crate::compiler::calling::{Invoke, InvokeContext, SceneChangeMessage, ActChangeMessage};
-use crate::{Cursor, HistoryItem, SabiEnd, ast};
+use crate::{Cursor, SabiEnd, ast};
 use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, SabiStart, ScriptId, VisualNovelState};
 
 use std::collections::HashMap;
@@ -122,11 +122,11 @@ fn trigger_running_controllers(
     visual_novel_state.statements = Cursor::new(act.scenes.get(&act.entrypoint)
         .context("Error retrieving act entrypoint")?
         .statements.clone());
-    visual_novel_state.history.push(HistoryItem::Descriptor(format!("Act: {}\n", act.name)));
-    visual_novel_state.history.push(HistoryItem::Descriptor(format!("Scene: {}\n", act.entrypoint)));
+    visual_novel_state.history.push(Statement::Stage(StageCommand::ActChange { act_expr: Box::new(ast::Expr::String(act.name.clone())) }));
     visual_novel_state.blocking = false;
 
     msg_writer.write(ControllersSetStateMessage(SabiState::Running));
+    visual_novel_state.history.push(Statement::Stage(StageCommand::SceneChange { scene_expr: Box::new(ast::Expr::String(act.entrypoint.clone())) }));
     Ok(())
 }
 fn propagate_state(
@@ -291,13 +291,16 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
             Some(Statement::TextItem(item)) => {
                 Some(Statement::TextItem(item))
             }
-            Some(Statement::Stage(s)) => {
+            Some(Statement::Stage(stm)) => {
+                info!("searching previous {:?}", stm);
                 let prev = game_state.statements.find_previous();
+                info!("item found {:?}", prev);
                 if let Some(s) = prev {
                     Some(s.undo_statement())
                 } else {
-                    match s {
+                    match stm {
                         ast::StageCommand::BackgroundChange { .. } => Some(Statement::Stage(ast::StageCommand::BackgroundChange { operation: BackgroundOperation::Reset })),
+                        ast::StageCommand::CharacterChange { character, .. } => Some(Statement::Stage(ast::StageCommand::CharacterChange { character, operation: crate::actor::ActorOperation::Despawn(false) })),
                         _ => { None }
                     }
                 }
@@ -326,11 +329,13 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
             //     _ => true
             // };
             // if to_save {
-                game_state.history.push(HistoryItem::Statement(stm.clone()));
+                game_state.history.push(stm.clone());
             // }
         }
         next_statement
     };
+    
+    info!("HISTORY {:#?}", game_state.history);
 
     if let Some(statement) = next_statement {
         statement.invoke(InvokeContext {
@@ -366,7 +371,6 @@ fn handle_scene_changes(
         info!("Changing to scene: {}", msg.scene_id);
         game_state.scene = new_scene.clone();
         game_state.statements = Cursor::new(game_state.scene.statements.clone());
-        game_state.history.push(HistoryItem::Descriptor(format!("Scene {}", new_scene.name)));
         game_state.blocking = false;
         info!("[ Scene changed to '{}' ]", msg.scene_id);
     }
@@ -394,7 +398,6 @@ fn handle_act_changes(
         game_state.act = Box::new(act.clone());
         game_state.scene = entrypoint_scene;
         game_state.statements = Cursor::new(game_state.scene.statements.clone());
-        game_state.history.push(HistoryItem::Descriptor(format!("Act {}", act.name)));
         game_state.blocking = false;
         info!("[ Act changed to '{}' ]", msg.act_id);
     }
