@@ -40,6 +40,8 @@ pub(crate) enum UiChangeInnerMessage {
 pub(crate) struct UiChangeMessage {
     pub command: UiChangeInnerMessage,
 }
+#[derive(Message)]
+pub struct UiChangeDefaultFont(pub String);
 
 /* States */
 #[derive(States, Debug, Default, Clone, Copy, Hash, Eq, PartialEq)]
@@ -115,6 +117,8 @@ pub(crate) struct CurrentTextBoxBackground(pub ImageNode);
 pub(crate) struct FontRegistry(pub HashMap<String, Handle<Font>>);
 #[derive(Resource)]
 pub(crate) struct CurrentFont(pub Handle<Font>);
+#[derive(Resource)]
+pub(crate) struct DefaultFont(pub Handle<Font>);
 #[derive(Resource, Default)]
 pub(crate) struct UiFolderLoaded(pub bool);
 #[derive(Resource, Default)]
@@ -180,6 +184,7 @@ impl Plugin for ChatController {
             .add_message::<CharacterSayMessage>()
             .add_message::<InfoTextMessage>()
             .add_message::<UiChangeMessage>()
+            .add_message::<UiChangeDefaultFont>()
             .add_plugins(UiWidgetsPlugins)
             .add_systems(Update, wait_trigger)
             .add_systems(OnEnter(ChatControllerState::Running), spawn_chatbox)
@@ -594,11 +599,13 @@ fn wait_trigger(
 fn update_ui(
     mut commands: Commands,
     mut change_messages: MessageReader<UiChangeMessage>,
+    mut change_default_font: MessageReader<UiChangeDefaultFont>,
     mut q_image_node: Query<
         (&mut ImageNode, Has<TextBoxBackground>, Has<NameBoxBackground>),
         Or<(With<TextBoxBackground>, With<NameBoxBackground>)>
     >,
     mut current_font: ResMut<CurrentFont>,
+    mut default_font: ResMut<DefaultFont>,
     font_registry: Res<FontRegistry>,
     audios: Res<AudioResources>,
     mut ui_sounds: ResMut<UiSounds>,
@@ -607,6 +614,12 @@ fn update_ui(
     concrete_images: Res<Assets<Image>>,
     gui_images: Res<UiImages>,
 ) -> Result<(), BevyError> {
+    
+    for ev in change_default_font.read() {
+        let new_font = font_registry.0.get(&ev.0).context(format!("Could not find font {}", ev.0))?;
+        default_font.0 = new_font.clone();
+    }
+    
     for ev in change_messages.read() {
         match ev.command.clone() {
             UiChangeInnerMessage::Set { target_element, target_property, image_mode } => {
@@ -666,6 +679,11 @@ fn update_ui(
                 match target_element {
                     UiChangeTarget::UiSounds => ui_sounds.0 = None,
                     UiChangeTarget::TypingSound => typing_sound.0 = None,
+                    UiChangeTarget::Font => {
+                        for mut font in &mut q_fonts {
+                            font.font = default_font.0.clone();
+                        }
+                    },
                     _ => { }
                 }
             }
