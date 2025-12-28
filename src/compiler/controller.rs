@@ -1,7 +1,8 @@
 use crate::actor::ActorChangeMessage;
 use crate::audio::controller::AudioChangeMessage;
+use crate::background::controller::BackgroundOperation;
 use crate::chat::controller::InfoTextMessage;
-use crate::compiler::ast::Statement;
+use crate::compiler::ast::{Statement, UndoableStatement};
 use crate::compiler::calling::{Invoke, InvokeContext, SceneChangeMessage, ActChangeMessage};
 use crate::{Cursor, HistoryItem, SabiEnd, ast};
 use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, SabiStart, ScriptId, VisualNovelState};
@@ -287,22 +288,46 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
         info!("rewinding {}", game_state.rewinding);
         game_state.rewinding -= 1;
         let next_statement = match game_state.statements.prev() {
-            Some(Statement::TextItem(item)) => Some(Statement::TextItem(item)),
-            Some(Statement::Stage(_)) => {
-                game_state.statements.find_previous()
+            Some(Statement::TextItem(item)) => {
+                Some(Statement::TextItem(item))
+            }
+            Some(Statement::Stage(s)) => {
+                let prev = game_state.statements.find_previous();
+                if let Some(s) = prev {
+                    Some(s.undo_statement())
+                } else {
+                    match s {
+                        ast::StageCommand::BackgroundChange { .. } => Some(Statement::Stage(ast::StageCommand::BackgroundChange { operation: BackgroundOperation::Reset })),
+                        _ => { None }
+                    }
+                }
             },
             // todo: Statement::Code currently not handled
-            // is history field needed?
             _ => { None }
         };
-        if let Some(_) = &next_statement {
+        if let Some(_) = next_statement {
             let _ = game_state.history.pop();
         }
         next_statement
     } else {
         let next_statement = game_state.statements.next();
         if let Some(stm) = &next_statement {
-            game_state.history.push(HistoryItem::Statement(stm.clone()));
+            // let to_save = match stm {
+            //     Statement::Stage(s) => {
+            //         match s {
+            //             ast::StageCommand::BackgroundChange { operation } => {
+            //                 if matches!(operation, BackgroundOperation::SlideTo(_)) {
+            //                     false
+            //                 } else { true }
+            //             },
+            //             _ => true
+            //         }
+            //     },
+            //     _ => true
+            // };
+            // if to_save {
+                game_state.history.push(HistoryItem::Statement(stm.clone()));
+            // }
         }
         next_statement
     };

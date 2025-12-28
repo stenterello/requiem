@@ -5,6 +5,8 @@ mod compiler;
 mod loader;
 mod audio;
 
+use std::fmt::Debug;
+
 use crate::audio::controller::AudioController;
 use crate::background::*;
 use crate::actor::controller::ActorConfig;
@@ -12,6 +14,7 @@ use crate::actor::controller::AnimationConfig;
 use crate::actor::*;
 use crate::chat::*;
 use crate::compiler::ast::Evaluate;
+use crate::compiler::ast::StageCommand;
 use crate::compiler::ast::Statement;
 use crate::compiler::ast::TextItem;
 use crate::compiler::*;
@@ -29,8 +32,18 @@ impl VariantKind for ast::Statement {
     fn kind(&self) -> usize {
         match self {
             Statement::TextItem(_) => 1,
-            Statement::Stage(_)    => 2,
-            Statement::Code(_)     => 3,
+            Statement::Stage(s) => {
+                match s {
+                    StageCommand::ActChange        { .. } => { 2 },
+                    StageCommand::AnimationChange  { .. } => { 3 },
+                    StageCommand::AudioChange      { .. } => { 4 },
+                    StageCommand::BackgroundChange { .. } => { 5 },
+                    StageCommand::CharacterChange  { .. } => { 6 },
+                    StageCommand::SceneChange      { .. } => { 7 },
+                    StageCommand::UiChange         { .. } => { 8 },
+                }
+            }
+            Statement::Code(_)     => 9,
         }
     }
 }
@@ -67,6 +80,7 @@ impl<T> Cursor<T> {
     where
         T: Clone
     {
+        info!("current pos {}", self.pos);
         if self.pos == 0 { return None; }
         self.pos -= 1;
         self.data.get(self.pos as usize).cloned()
@@ -109,15 +123,20 @@ pub(crate) struct VisualNovelState {
     pub history: Vec<HistoryItem>,
 }
 
+#[derive(Debug)]
 pub(crate) enum HistoryItem {
     Statement(ast::Statement),
     Descriptor(String),
 }
 
 impl VisualNovelState {
-    pub fn set_rewind(&mut self) {
+    pub fn set_rewind(&mut self) -> Result<(), BevyError> {
+        if !self.text_before() {
+            return Err(anyhow::anyhow!("No previous valid statement").into());
+        }
         let search_slice = &self.history[..self.history.len() - 1];
         let last_d = search_slice.iter().rposition(|s| {
+            info!("s {:?}",s);
             if let HistoryItem::Statement(stm) = s {
                 matches!(stm, Statement::TextItem(TextItem::Dialogue(_)))
             } else {
@@ -127,7 +146,8 @@ impl VisualNovelState {
         if let Some(index) = last_d {
             self.rewinding = self.history.len() - (index + 1);
             self.blocking = false;
-        }
+            Ok(())
+        } else { return Err(anyhow::anyhow!("No previous valid statement").into()); }
     }
 
     pub fn history_summary(&self) -> Result<Vec<String>> {
@@ -154,6 +174,18 @@ impl VisualNovelState {
         }
 
         Ok(text)
+    }
+    
+    fn text_before(&self) -> bool {
+        let search_slice = &self.history[..self.history.len() - 1];
+        let last_d = search_slice.iter().rposition(|s| {
+            if let HistoryItem::Statement(stm) = s {
+                matches!(stm, Statement::TextItem(TextItem::Dialogue(_)))
+            } else {
+                false
+            }
+        });
+        last_d.is_some()
     }
 }
 

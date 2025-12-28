@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 use crate::{
-    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, audio::controller::AudioCommand, background::controller::{BackgroundDirection, BackgroundOperation}, chat::controller::{UiChangeTarget, UiImageMode}
+    actor::{ActorOperation, controller::{ActorDirection, ActorPosition, ActorType, AnimationPosition, CharacterPosition, SpawnInfo}}, audio::controller::AudioCommand, background::{BackgroundChangeMessage, controller::{BackgroundDirection, BackgroundOperation}}, chat::controller::{UiChangeTarget, UiImageMode}
 };
 
 #[derive(Parser)]
@@ -142,6 +142,41 @@ pub(crate) enum Statement {
     Code(CodeStatement),
     Stage(StageCommand),
     TextItem(TextItem)
+}
+
+pub(crate) trait UndoableStatement {
+    fn undo_statement(&self) -> Statement;
+}
+
+impl UndoableStatement for Statement {
+    fn undo_statement(&self) -> Statement {
+        match self {
+            Statement::Code(_) => self.clone(),
+            Statement::TextItem(_) => self.clone(),
+            Statement::Stage(s) => {
+                match s {
+                    StageCommand::BackgroundChange { operation } => {
+                        match operation {
+                            BackgroundOperation::DissolveTo(target) => {
+                                Statement::Stage(StageCommand::BackgroundChange {
+                                    operation: if let Some(t) = target {
+                                        BackgroundOperation::ChangeTo(t.to_owned())
+                                    } else { BackgroundOperation::Reset }
+                                })
+                            },
+                            BackgroundOperation::SlideTo(_) => {
+                                Statement::Stage(StageCommand::BackgroundChange {
+                                    operation: BackgroundOperation::Ignore
+                                })
+                            }
+                            _ => Statement::Stage(s.to_owned()),
+                        }
+                    },
+                    _ => Statement::Stage(s.to_owned())
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

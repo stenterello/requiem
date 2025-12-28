@@ -50,6 +50,13 @@ struct BackgroundImages(HashMap::<String, Handle<Image>>);
 struct Dissolving(Option<f32>);
 #[derive(Resource, Default)]
 struct Sliding(BackgroundDirection);
+#[derive(Resource)]
+pub struct DefaultBackground(pub Handle<Image>);
+impl Default for DefaultBackground {
+    fn default() -> Self {
+        Self(TRANSPARENT_IMAGE_HANDLE)
+    }
+}
 
 /* Messages */
 /// Message used to instruct [BackgroundController] to change current background.
@@ -64,6 +71,8 @@ pub(crate) enum BackgroundOperation {
     ChangeTo(String),
     DissolveTo(Option<String>),
     SlideTo(BackgroundDirection),
+    Reset,
+    Ignore,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -81,6 +90,7 @@ impl Plugin for BackgroundController {
         app.add_message::<BackgroundChangeMessage>()
             .init_state::<BackgroundControllerState>()
             .init_resource::<Dissolving>()
+            .init_resource::<DefaultBackground>()
             .add_systems(Update, check_state_change)
             .add_systems(OnEnter(BackgroundControllerState::Loading), import_backgrounds_folder)
             .add_systems(Update, check_loading_state.run_if(in_state(BackgroundControllerState::Loading)))
@@ -173,6 +183,7 @@ fn update_background(
     mut background_change_message: MessageReader<BackgroundChangeMessage>,
     background_images: Res<BackgroundImages>,
     mut background_query: Single<(Entity, &mut ImageNode, &mut Node), With<BackgroundNode>>,
+    default_background: Res<DefaultBackground>,
     mut vn_state: ResMut<VisualNovelState>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -219,7 +230,16 @@ fn update_background(
                 commands.insert_resource(Sliding(direction.clone()));
                 vn_state.blocking = true;
                 info!("[ Sliding background to '{:?}']", direction);
-            }
+            },
+            BackgroundOperation::Reset => {
+                background_query.1.image = default_background.0.clone();
+                background_query.2.top = Val::Auto;
+                background_query.2.left = Val::Auto;
+                background_query.2.bottom = Val::Auto;
+                background_query.2.right = Val::Auto;
+                info!("[ Change background to default]");
+            },
+            _ => {}
         }
     }
     Ok(())

@@ -277,9 +277,10 @@ fn button_clicked_default_state<'a>(
         },
         UiButtons::Rewind => {
             warn!("Rewind button clicked!");
-            *info_text.0 = GUIScrollText::default();
-            *message_text.0 = GUIScrollText::default();
-            game_state.set_rewind();
+            if let Ok(()) = game_state.set_rewind() {
+                *info_text.0 = GUIScrollText::default();
+                *message_text.0 = GUIScrollText::default();
+            }
             true
         },
         UiButtons::TextBox => {

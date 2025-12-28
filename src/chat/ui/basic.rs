@@ -174,6 +174,10 @@ pub(in crate::chat::ui) fn button(action: UiButtons) -> Result<impl Bundle, Bevy
         Button,
         children![
             Text::new(button_text),
+            TextFont {
+                font_size: 6.,
+                ..default()
+            },
             TextShadow::default()
         ]
     ))
@@ -186,9 +190,10 @@ pub(in crate::chat) fn vn_commands() -> Result<impl Bundle, BevyError> {
             bottom: percent(0.),
             right: percent(0.),
             flex_direction: FlexDirection::Row,
+            column_gap: px(5.0),
             margin: UiRect::default()
-                .with_bottom(percent(1.5))
-                .with_right(percent(3.)),
+                .with_bottom(percent(1.))
+                .with_right(percent(2.5)),
             ..default()
         },
         VnCommands,
