@@ -1,4 +1,4 @@
-SCENE ui_settings
+SCENE audio
     (set namebox to "NAMEBOX")
     (set textbox to "nine_slice" sliced)
     (Nayu appears)

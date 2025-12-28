@@ -1,8 +1,8 @@
 use crate::actor::ActorChangeMessage;
-use crate::audio::controller::AudioChangeMessage;
+use crate::audio::controller::{AudioChangeMessage, AudioCommand};
 use crate::background::controller::BackgroundOperation;
 use crate::chat::controller::InfoTextMessage;
-use crate::compiler::ast::{StageCommand, Statement, UndoableStatement};
+use crate::compiler::ast::{StageCommand, Statement, UiChangeCommand, UndoableStatement};
 use crate::compiler::calling::{Invoke, InvokeContext, SceneChangeMessage, ActChangeMessage};
 use crate::{Cursor, SabiEnd, ast};
 use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, SabiStart, ScriptId, VisualNovelState};
@@ -299,6 +299,21 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
                     match stm {
                         ast::StageCommand::BackgroundChange { .. } => Some(Statement::Stage(ast::StageCommand::BackgroundChange { operation: BackgroundOperation::Reset })),
                         ast::StageCommand::CharacterChange { character, .. } => Some(Statement::Stage(ast::StageCommand::CharacterChange { character, operation: crate::actor::ActorOperation::Despawn(false) })),
+                        ast::StageCommand::AnimationChange { animation, .. } => Some(Statement::Stage(ast::StageCommand::AnimationChange { animation, operation: crate::actor::ActorOperation::Despawn(false) })),
+                        ast::StageCommand::UiChange { command } => match command {
+                            UiChangeCommand::Set { target_element, .. } => {
+                                Some(Statement::Stage(ast::StageCommand::UiChange { command: ast::UiChangeCommand::Unset { target_element } }))
+                            },
+                            _ => { None }
+                        },
+                        ast::StageCommand::AudioChange { command, category, audio, volume } => {
+                            match command {
+                                AudioCommand::Start => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Stop, category, audio, volume })),
+                                AudioCommand::Pause => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Unpause, category, audio, volume })),
+                                AudioCommand::Unpause => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Pause, category, audio, volume })),
+                                AudioCommand::Stop => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Start, category, audio, volume })),
+                            }
+                        }
                         _ => { None }
                     }
                 }

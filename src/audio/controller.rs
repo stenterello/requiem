@@ -237,7 +237,6 @@ fn update_audio(
                 }
             },
             AudioCommand::Pause => {
-                info!("PAUSE COMMAND {msg:?}");
                 match msg.category.as_str() {
                     "music" => {
                         if !q_sinks.p0().is_empty() {

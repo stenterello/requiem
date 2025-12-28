@@ -7,11 +7,13 @@ mod audio;
 
 use std::fmt::Debug;
 
+use crate::audio::controller::AudioCommand;
 use crate::audio::controller::AudioController;
 use crate::background::*;
 use crate::actor::controller::ActorConfig;
 use crate::actor::controller::AnimationConfig;
 use crate::actor::*;
+use crate::chat::controller::UiChangeTarget;
 use crate::chat::*;
 use crate::compiler::ast::Evaluate;
 use crate::compiler::ast::StageCommand;
@@ -36,14 +38,47 @@ impl VariantKind for ast::Statement {
                 match s {
                     StageCommand::ActChange        { .. } => { 2 },
                     StageCommand::AnimationChange  { .. } => { 3 },
-                    StageCommand::AudioChange      { .. } => { 4 },
-                    StageCommand::BackgroundChange { .. } => { 5 },
-                    StageCommand::CharacterChange  { .. } => { 6 },
-                    StageCommand::SceneChange      { .. } => { 7 },
-                    StageCommand::UiChange         { .. } => { 8 },
+                    StageCommand::AudioChange { command, category, .. } => {
+                        match (command, category.as_str()) {
+                            (AudioCommand::Start,   "music") |
+                            (AudioCommand::Stop,    "music")   => { 4 },
+                            (AudioCommand::Pause,   "music") |
+                            (AudioCommand::Unpause, "music")   => { 5 },
+                            (AudioCommand::Start,   "sfx") |
+                            (AudioCommand::Stop,    "sfx")     => { 6 },
+                            (AudioCommand::Pause,   "sfx") |
+                            (AudioCommand::Unpause, "sfx")     => { 7 },
+                            _                                  => { 8 },
+                        }
+                    },
+                    StageCommand::BackgroundChange { .. } => { 9 },
+                    StageCommand::CharacterChange  { .. } => { 10 },
+                    StageCommand::SceneChange      { .. } => { 11 },
+                    StageCommand::UiChange         { command } => {
+                        match command {
+                            ast::UiChangeCommand::Set { target_element, .. } => {
+                                match target_element {
+                                    UiChangeTarget::Font              => { 12 },
+                                    UiChangeTarget::TextBoxBackground => { 13 },
+                                    UiChangeTarget::NameBoxBackground => { 14 },
+                                    UiChangeTarget::TypingSound       => { 15 },
+                                    UiChangeTarget::UiSounds          => { 16 },
+                                }
+                            },
+                            ast::UiChangeCommand::Unset { target_element } => {
+                                match target_element {
+                                    UiChangeTarget::Font              => { 12 },
+                                    UiChangeTarget::TextBoxBackground => { 13 },
+                                    UiChangeTarget::NameBoxBackground => { 14 },
+                                    UiChangeTarget::TypingSound       => { 15 },
+                                    UiChangeTarget::UiSounds          => { 16 },
+                                }
+                            }
+                        }
+                    },
                 }
             }
-            Statement::Code(_)     => 9,
+            Statement::Code(_)     => 17,
         }
     }
 }
