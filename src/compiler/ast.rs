@@ -98,16 +98,21 @@ pub(crate) enum CodeStatement {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) enum UiChangeCommand {
+    Set {
+        target_element: UiChangeTarget,
+        target_property: Box<Expr>,
+        image_mode: Option<UiImageMode>,
+    },
+    Unset {
+        target_element: UiChangeTarget
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) enum StageCommand {
     BackgroundChange { operation: BackgroundOperation },
-    UiChange {
-        ui_target: UiChangeTarget,
-        target_font: Option<Box<Expr>>,
-        sprite_expr: Option<Box<Expr>>,
-        image_mode: Option<UiImageMode>,
-        ui_sounds: Option<Box<Expr>>,
-        typing_sound: Option<Box<Expr>>,
-    },
+    UiChange { command: UiChangeCommand },
     SceneChange { scene_expr: Box<Expr> },
     ActChange { act_expr: Box<Expr> },
     CharacterChange { character: String, operation: ActorOperation },
@@ -283,122 +288,109 @@ fn build_actor_movement_directive(actor: &str, action: &str, mut action_iter: pe
     }
 }
 
-pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
-    ensure!(pair.as_rule() == Rule::stage_command,
-        "Expected stage rule, found {:?}", pair.as_rule());
+fn build_background_change(command_pair: Pair<'_, Rule>) -> Result<StageCommand> {
+    let mut inner = command_pair.into_inner();
+    let background_operation = inner.next().context("Background operation missing")?;
+    let action = background_operation.into_inner().next().context("Background action missing")?;
 
-    let command_pair = pair.into_inner().next()
-        .context("Stage command missing inner command")?;
+    ensure!(action.as_rule() == Rule::background_action,
+        "Expected background action, found {:?}", action.as_rule());
 
-    let result = match command_pair.as_rule() {
-        Rule::background_change => {
-            let mut inner = command_pair.into_inner();
-            let background_operation = inner.next().context("Background operation missing")?;
-            let action = background_operation.into_inner().next().context("Background action missing")?;
+    let def = action.into_inner().next().context("Invalid background action")?;
 
-            ensure!(action.as_rule() == Rule::background_action,
-                "Expected background action, found {:?}", action.as_rule());
-
-            let def = action.into_inner().next().context("Invalid background action")?;
-
-            let operation = match def.as_rule() {
-                Rule::background_change_def => {
-                    let target = def.into_inner().next()
-                        .context("Background - Missing change operation target")?
-                        .as_str().trim_matches('"').to_owned();
-                    BackgroundOperation::ChangeTo(target)
-                },
-                Rule::background_dissolve_def => {
-                    let target = match def.into_inner().next() {
-                        Some(rule) => Some(rule.as_str().trim_matches('"').to_owned()),
-                        None => None
-                    };
-                    BackgroundOperation::DissolveTo(target)
-                },
-                Rule::background_slide_def => {
-                    let direction_rule = def.into_inner().next().context("Background direction missing")?;
-                    ensure!(direction_rule.as_rule() == Rule::background_direction,
-                        "Expected background direction, found {:?}", direction_rule);
-
-                    let direction = match direction_rule.as_str() {
-                        "N" | "North" => BackgroundDirection::North,
-                        "S" | "South" => BackgroundDirection::South,
-                        "E" | "East" => BackgroundDirection::East,
-                        "W" | "West" => BackgroundDirection::West,
-                        other => bail!("Unidentified direction {}", other)
-                    };
-                    BackgroundOperation::SlideTo(direction)
-                },
-                _ => { bail!("Invalid background action"); }
-            };
-
-            StageCommand::BackgroundChange { operation }
+    let operation = match def.as_rule() {
+        Rule::background_change_def => {
+            let target = def.into_inner().next()
+                .context("Background - Missing change operation target")?
+                .as_str().trim_matches('"').to_owned();
+            BackgroundOperation::ChangeTo(target)
         },
-        Rule::ui_change => {
-            let mut inner = command_pair.into_inner();
-            let gui_element_pair = inner.next()
-                .context("UI change missing UI element")?;
-
-            // Convert ui_element to the appropriate ID
-            let ui_target = match gui_element_pair.as_str() {
-                "textbox"      => UiChangeTarget::TextBoxBackground,
-                "namebox"      => UiChangeTarget::NameBoxBackground,
-                "font"         => UiChangeTarget::Font,
-                "ui sfx"       => UiChangeTarget::UiSounds,
-                "typing sound" => UiChangeTarget::TypingSound,
-                other => bail!("Unknown UI element: {}", other)
+        Rule::background_dissolve_def => {
+            let target = match def.into_inner().next() {
+                Some(rule) => Some(rule.as_str().trim_matches('"').to_owned()),
+                None => None
             };
+            BackgroundOperation::DissolveTo(target)
+        },
+        Rule::background_slide_def => {
+            let direction_rule = def.into_inner().next().context("Background direction missing")?;
+            ensure!(direction_rule.as_rule() == Rule::background_direction,
+                "Expected background direction, found {:?}", direction_rule);
 
+            let direction = match direction_rule.as_str() {
+                "N" | "North" => BackgroundDirection::North,
+                "S" | "South" => BackgroundDirection::South,
+                "E" | "East" => BackgroundDirection::East,
+                "W" | "West" => BackgroundDirection::West,
+                other => bail!("Unidentified direction {}", other)
+            };
+            BackgroundOperation::SlideTo(direction)
+        },
+        _ => { bail!("Invalid background action"); }
+    };
+
+    Ok(StageCommand::BackgroundChange { operation })
+}
+
+fn build_ui_change(command_pair: Pair<'_, Rule>) -> Result<StageCommand> {
+    let mut inner = command_pair.into_inner();
+    let operation = inner.next().context("Could not get ui_change_operation")?;
+    ensure!(operation.as_rule() == Rule::ui_change_operation,
+        "Expected ui_change_operation, found {:?}", operation.as_rule());
+    
+    let mut inner_operation = operation.into_inner();
+    let command = inner_operation.next().context("Could not get ui change command")?;
+    let element_pair = inner_operation.next().context("UI change missing UI element")?;
+    let ui_target: UiChangeTarget = element_pair.as_str().try_into()?;
+    let stage_command = match command.as_rule() {
+        Rule::ui_set_command => {
             match ui_target {
                 UiChangeTarget::Font => {
-                    let font_expr_pair = inner.next()
+                    let font_expr_pair = inner_operation.next()
                         .context("Ui font change missing target font")?;
                     let font_expr = build_expression(font_expr_pair)
                         .context("Failed to build font expression for UI change")?;
                     StageCommand::UiChange {
-                        ui_target,
-                        target_font: Some(Box::new(font_expr)),
-                        sprite_expr: None,
-                        image_mode: None,
-                        ui_sounds: None,
-                        typing_sound: None,
+                        command: UiChangeCommand::Set {
+                            target_element: ui_target,
+                            target_property: Box::new(font_expr),
+                            image_mode: None
+                        }
                     }
                 },
                 UiChangeTarget::UiSounds => {
-                    let ui_sound_expr_pair = inner.next()
+                    let ui_sound_expr_pair = inner_operation.next()
                         .context("Ui sound change missing ui sounds")?;
                     let ui_sound_expr = build_expression(ui_sound_expr_pair)
                         .context("Failed to build ui sound expression for UI change")?;
                     StageCommand::UiChange {
-                        ui_target,
-                        target_font: None,
-                        sprite_expr: None,
-                        image_mode: None,
-                        ui_sounds: Some(Box::new(ui_sound_expr)),
-                        typing_sound: None,
+                        command: UiChangeCommand::Set {
+                            target_element: ui_target,
+                            target_property: Box::new(ui_sound_expr),
+                            image_mode: None
+                        }
                     }
                 },
                 UiChangeTarget::TypingSound => {
-                    let typing_sound_expr_pair = inner.next()
+                    let typing_sound_expr_pair = inner_operation.next()
                         .context("Ui change missing typing name")?;
                     let typing_sound_expr = build_expression(typing_sound_expr_pair)
                         .context("Failed to build typing expression for UI change")?;
                     StageCommand::UiChange {
-                            ui_target,
-                            target_font: None,
-                            sprite_expr: None,
-                            image_mode: None,
-                            ui_sounds: None,
-                            typing_sound: Some(Box::new(typing_sound_expr)),
+                        command: UiChangeCommand::Set {
+                            target_element: ui_target,
+                            target_property: Box::new(typing_sound_expr),
+                            image_mode: None
                         }
+                    }
                 },
                 _ => {
-                    let sprite_expr_pair = inner.next()
+                    let sprite_expr_pair = inner_operation.next()
                         .context("UI change missing sprite expression")?;
-                    let sprite_expr = build_expression(sprite_expr_pair)
+                    let target_sprite_expr = build_expression(sprite_expr_pair)
                         .context("Failed to build sprite expression for UI change")?;
         
-                    let image_mode = if let Some(image_mode) = inner.next() {
+                    let target_image_mode = if let Some(image_mode) = inner_operation.next() {
                         ensure!(image_mode.as_rule() == Rule::image_mode,
                             "Expected image mode, found {:?}", image_mode.as_rule());
                         match image_mode.as_str() {
@@ -408,17 +400,33 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
                     } else { Some(UiImageMode::Auto) };
                     
                     StageCommand::UiChange {
-                        ui_target,
-                        target_font: None,
-                        sprite_expr: Some(Box::new(sprite_expr)),
-                        image_mode,
-                        ui_sounds: None,
-                        typing_sound: None,
+                        command: UiChangeCommand::Set {
+                            target_element: ui_target,
+                            target_property: Box::new(target_sprite_expr),
+                            image_mode: target_image_mode
+                        }
                     }
                 }
             }
-
         },
+        Rule::ui_unset_command => {
+            StageCommand::UiChange { command: UiChangeCommand::Unset { target_element: ui_target } }
+        },
+        other => { return Err(anyhow::anyhow!("Unexpected rule {:?}", other).into()); }
+    };
+    Ok(stage_command)
+}
+
+pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
+    ensure!(pair.as_rule() == Rule::stage_command,
+        "Expected stage rule, found {:?}", pair.as_rule());
+
+    let command_pair = pair.into_inner().next()
+        .context("Stage command missing inner command")?;
+
+    let result = match command_pair.as_rule() {
+        Rule::background_change => build_background_change(command_pair)?,
+        Rule::ui_change => build_ui_change(command_pair)?,
         Rule::scene_change => {
             let expr_pair = command_pair.into_inner().next()
                 .context("Scene change missing expression")?;

@@ -1,7 +1,7 @@
 use crate::audio::controller::AudioChangeMessage;
-use crate::chat::controller::{InfoTextMessage, UiChangeTarget};
+use crate::chat::controller::{InfoTextMessage, UiChangeInnerMessage, UiChangeTarget};
 use crate::{BackgroundChangeMessage, CharacterSayMessage, UiChangeMessage, ActorChangeMessage, VisualNovelState};
-use crate::compiler::ast::{CodeStatement, Dialogue, Evaluate, InfoText, StageCommand, Statement, TextItem};
+use crate::compiler::ast::{CodeStatement, Dialogue, Evaluate, InfoText, StageCommand, Statement, TextItem, UiChangeCommand};
 use bevy::prelude::*;
 use anyhow::{Context, Result};
 
@@ -77,61 +77,31 @@ impl Invoke for StageCommand {
                     operation: operation.clone(),
                 });
             },
-            StageCommand::UiChange { ui_target, target_font, sprite_expr, image_mode, ui_sounds, typing_sound } => {
-                let ui_target = ui_target.clone();
-                let message = match ui_target {
-                    UiChangeTarget::Font => {
-                        let target_font = target_font.clone().context("Target font field empty")?;
-                        let target_font_str = target_font.evaluate_into_string()?;
-                        info!("Invoking StageCommand::UiChange font to {}", target_font_str);
-                        UiChangeMessage {
-                            ui_target,
-                            target_font: Some(target_font_str),
-                            sprite_id: None,
-                            image_mode: None,
-                            ui_sounds: None,
-                            typing_sound: None,
+            StageCommand::UiChange { command } => {
+                let message = match command {
+                    UiChangeCommand::Set { target_element, target_property, image_mode } => {
+                        match target_element {
+                            UiChangeTarget::NameBoxBackground | UiChangeTarget::TextBoxBackground => {
+                                let sprite_id = target_property.evaluate_into_string()
+                                    .context("...while evaluating UiChange sprite expression")?;
+                                let image_mode = image_mode.clone();
+                                info!("Invoking StageCommand::UiChange to {:?}'s {}", target_element, sprite_id);
+                                UiChangeMessage {
+                                    command: UiChangeInnerMessage::Set { target_element: target_element.clone(), target_property: sprite_id, image_mode }
+                                }
+                            }
+                            _ => {
+                                let target_property = target_property.evaluate_into_string()?;
+                                info!("Invoking StageCommand::UiChange {:?} to {}", target_element, target_property);
+                                UiChangeMessage {
+                                    command: UiChangeInnerMessage::Set { target_element: target_element.clone(), target_property: target_property, image_mode: None }
+                                }
+                            },
                         }
                     },
-                    UiChangeTarget::UiSounds => {
-                        let target_sound = ui_sounds.clone().context("ui_sounds field empty")?;
-                        let target_sound_str = target_sound.evaluate_into_string()?;
-                        info!("Invoking StageCommand::UiChange ui sounds to {}", target_sound_str);
+                    UiChangeCommand::Unset { target_element } => {
                         UiChangeMessage {
-                            ui_target,
-                            target_font: None,
-                            sprite_id: None,
-                            image_mode: None,
-                            ui_sounds: Some(target_sound_str),
-                            typing_sound: None,
-                        }
-                    },
-                    UiChangeTarget::TypingSound => {
-                        let target_sound = typing_sound.clone().context("typing field empty")?;
-                        let target_sound_str = target_sound.evaluate_into_string()?;
-                        info!("Invoking StageCommand::UiChange typing sound to {}", target_sound_str);
-                        UiChangeMessage {
-                            ui_target,
-                            target_font: None,
-                            sprite_id: None,
-                            image_mode: None,
-                            ui_sounds: None,
-                            typing_sound: Some(target_sound_str),
-                        }
-                    },
-                    _ => {
-                        let sprite_expr = sprite_expr.clone().context("Sprite expr empty")?;
-                        let sprite_id = sprite_expr.evaluate_into_string()
-                            .context("...while evaluating UiChange sprite expression")?;
-                        let image_mode = image_mode.clone();
-                        info!("Invoking StageCommand::UiChange to {:?}'s {}", ui_target, sprite_id);
-                        UiChangeMessage {
-                            ui_target,
-                            target_font: None,
-                            sprite_id: Some(sprite_id),
-                            image_mode,
-                            ui_sounds: None,
-                            typing_sound: None,
+                            command: UiChangeInnerMessage::Unset { target_element: target_element.clone() }
                         }
                     }
                 };

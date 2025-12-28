@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use anyhow::Context;
 use bevy::{asset::{LoadState, LoadedFolder}, prelude::*, time::Stopwatch};
-use bevy_audio::Volume;
 use bevy_ui_widgets::{Activate, UiWidgetsPlugins};
 
 use crate::{
@@ -28,14 +27,18 @@ pub(crate) struct CharacterSayMessage {
 pub(crate) struct InfoTextMessage {
     pub text: String
 }
+#[derive(Clone)]
+pub(crate) enum UiChangeInnerMessage {
+    Set {
+        target_element: UiChangeTarget,
+        target_property: String,
+        image_mode: Option<UiImageMode>,
+    },
+    Unset { target_element: UiChangeTarget }
+}
 #[derive(Message)]
 pub(crate) struct UiChangeMessage {
-    pub ui_target: UiChangeTarget,
-    pub target_font: Option<String>,
-    pub sprite_id: Option<String>,
-    pub image_mode: Option<UiImageMode>,
-    pub ui_sounds: Option<String>,
-    pub typing_sound: Option<String>,
+    pub command: UiChangeInnerMessage,
 }
 
 /* States */
@@ -122,13 +125,30 @@ pub(crate) struct UiSounds(pub Option<Handle<AudioSource>>);
 pub(crate) struct TypingSound(pub Option<Handle<AudioSource>>);
 
 /* Custom types */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum UiChangeTarget {
     TextBoxBackground,
     NameBoxBackground,
     Font,
     UiSounds,
     TypingSound,
+}
+impl TryFrom<&str> for UiChangeTarget {
+    type Error = std::io::Error;
+    
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value {
+            "textbox"      => Ok(UiChangeTarget::TextBoxBackground),
+            "namebox"      => Ok(UiChangeTarget::NameBoxBackground),
+            "font"         => Ok(UiChangeTarget::Font),
+            "ui sfx"       => Ok(UiChangeTarget::UiSounds),
+            "typing sound" => Ok(UiChangeTarget::TypingSound),
+            other => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Unexpected position: {:?}", other),
+            ))
+        }
+    }
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) enum UiImageMode {
@@ -468,7 +488,7 @@ fn update_chatbox(
     mut scroll_stopwatch: ResMut<ChatScrollStopwatch>,
     mut game_state: ResMut<VisualNovelState>,
     typing_sound: Res<TypingSound>,
-    q_typing_player: Query<Entity, With<TypingAudioPlayer>>,
+    q_typing_player: Query<&AudioSink, With<TypingAudioPlayer>>,
     time: Res<Time>,
 ) -> Result<(), BevyError> {
     // Tick clock
@@ -489,19 +509,15 @@ fn update_chatbox(
         println!("MESSAGE {}", ev.message);
         message_text.0.message = ev.message.clone();
         if let Some(sound) = &typing_sound.0 {
-            if !q_typing_player.is_empty() {
-                let entity = q_typing_player.single().context("Unable to retrieve Typing audio player")?;
-                commands.entity(entity).despawn();
+            if q_typing_player.is_empty() {
+                commands.spawn((
+                    AudioPlayer::new(sound.clone()),
+                    TypingAudioPlayer
+                ));
+            } else {
+                let player = q_typing_player.single().context("Unable to retrieve Typing audio player")?;
+                player.play();
             }
-            let playback_settings = PlaybackSettings {
-                // volume: Volume::Linear(msg.volume),
-                ..default()
-            };
-            commands.spawn((
-                AudioPlayer::new(sound.clone()),
-                playback_settings,
-                TypingAudioPlayer
-            ));
         }
     }
 
@@ -516,12 +532,11 @@ fn update_chatbox(
     // Get the section of the string according to the elapsed time
     let length: usize = (scroll_stopwatch.0.elapsed_secs() * 50.) as usize;
     
-    info!("messagetextlen {}, originalstringlen {}", length, original_string.len());
-    if length == original_string.len() {
+    if length >= original_string.len() {
         if let Some(_) = &typing_sound.0 {
             if !q_typing_player.is_empty() {
-                let entity = q_typing_player.single().context("Unable to retrieve Typing audio player")?;
-                commands.entity(entity).despawn();
+                let player = q_typing_player.single().context("Unable to retrieve Typing audio player")?;
+                player.pause();
             }
         }
     }
@@ -593,63 +608,68 @@ fn update_ui(
     gui_images: Res<UiImages>,
 ) -> Result<(), BevyError> {
     for ev in change_messages.read() {
-        match ev.ui_target {
-            UiChangeTarget::TextBoxBackground => {
-                let sprite_id = ev.sprite_id.clone().context("Missing sprite id!")?;
-                let image = gui_images.0.get(&sprite_id)
-                    .context(format!("UI asset '{}' does not exist", sprite_id))?;
-                let mut target = q_image_node.iter_mut().find(|q| q.1 == true)
-                    .context("Unable to find textbox")?.0;
-                target.image = image.clone();
-                target.image_mode = match ev.image_mode {
-                    Some(UiImageMode::Sliced) => {
-                        let concrete_image = concrete_images.get(image).context("Could not find image")?;
-                        let concrete_image_size = concrete_image.texture_descriptor.size;
-                        let slice_cuts = BorderRect {
-                            top: concrete_image_size.height as f32 / 5.,
-                            bottom: concrete_image_size.height as f32 / 5.,
-                            left: concrete_image_size.width as f32 / 5.,
-                            right: concrete_image_size.width as f32 / 5.
+        match ev.command.clone() {
+            UiChangeInnerMessage::Set { target_element, target_property, image_mode } => {
+                match target_element {
+                    UiChangeTarget::TextBoxBackground | UiChangeTarget::NameBoxBackground => {
+                        let image = gui_images.0.get(&target_property)
+                            .context(format!("UI asset '{}' does not exist", target_property))?;
+                        let mut target = if target_element == UiChangeTarget::TextBoxBackground {
+                            q_image_node.iter_mut().find(|q| q.1 == true)
+                                .context("Unable to find textbox")?.0
+                        } else {
+                            q_image_node.iter_mut().find(|q| q.2 == true)
+                                .context("Unable to find textbox")?.0
                         };
-                        NodeImageMode::Sliced(TextureSlicer {
-                            border: slice_cuts,
-                            center_scale_mode: SliceScaleMode::Tile { stretch_value: 1. },
-                            sides_scale_mode: SliceScaleMode::Tile { stretch_value: 1. },
-                            ..default()
-                        })
+                        target.image = image.clone();
+                        target.image_mode = match image_mode {
+                            Some(UiImageMode::Sliced) => {
+                                let concrete_image = concrete_images.get(image).context("Could not find image")?;
+                                let concrete_image_size = concrete_image.texture_descriptor.size;
+                                let slice_cuts = BorderRect {
+                                    top: concrete_image_size.height as f32 / 5.,
+                                    bottom: concrete_image_size.height as f32 / 5.,
+                                    left: concrete_image_size.width as f32 / 5.,
+                                    right: concrete_image_size.width as f32 / 5.
+                                };
+                                NodeImageMode::Sliced(TextureSlicer {
+                                    border: slice_cuts,
+                                    center_scale_mode: SliceScaleMode::Tile { stretch_value: 1. },
+                                    sides_scale_mode: SliceScaleMode::Tile { stretch_value: 1. },
+                                    ..default()
+                                })
+                            },
+                            Some(UiImageMode::Auto) => NodeImageMode::Auto,
+                            None => { return Err(anyhow::anyhow!("Ui Image Mode missing!").into()) }
+                        };
+                        if target_element == UiChangeTarget::TextBoxBackground {
+                            commands.insert_resource(CurrentTextBoxBackground(target.clone()));
+                        }
                     },
-                    Some(UiImageMode::Auto) => NodeImageMode::Auto,
-                    None => { return Err(anyhow::anyhow!("Ui Image Mode missing!").into()) }
-                };
-                commands.insert_resource(CurrentTextBoxBackground(target.clone()));
-            }
-            UiChangeTarget::NameBoxBackground => {
-                let sprite_id = ev.sprite_id.clone().context("Missing sprite id!")?;
-                let image = gui_images.0.get(&sprite_id)
-                    .context(format!("UI asset '{}' does not exist", sprite_id))?;
-                let mut target = q_image_node.iter_mut().find(|q| q.2 == true)
-                    .context("Unable to find namebox")?.0;
-
-                target.image = image.clone();
-            },
-            UiChangeTarget::Font => {
-                let font_id = ev.target_font.clone().context("Missing target font!")?;
-                current_font.0 = font_registry.0.get(&font_id).context("Target font {font_id} not found in registry")?.clone();
-                for mut font in &mut q_fonts {
-                    font.font = current_font.0.clone();
+                    UiChangeTarget::Font => {
+                        current_font.0 = font_registry.0.get(&target_property).context("Target font {target_property} not found in registry")?.clone();
+                        for mut font in &mut q_fonts {
+                            font.font = current_font.0.clone();
+                        }
+                    },
+                    UiChangeTarget::UiSounds => {
+                        let concrete_sound = audios.category("ui")?.get(&target_property).context(format!("Unable to find {target_property} sound"))?;
+                        ui_sounds.0 = Some(concrete_sound.clone());
+                    },
+                    UiChangeTarget::TypingSound => {
+                        let concrete_sound = audios.category("ui")?.get(&target_property).context(format!("Unable to find {target_property} sound"))?;
+                        typing_sound.0 = Some(concrete_sound.clone());
+                    }
                 }
             },
-            UiChangeTarget::UiSounds => {
-                let sounds_id = ev.ui_sounds.clone().context("Missing ui sounds!")?;
-                let concrete_sound = audios.category("ui")?.get(&sounds_id).context(format!("Unable to find {} sound", sounds_id))?;
-                ui_sounds.0 = Some(concrete_sound.clone());
-            },
-            UiChangeTarget::TypingSound => {
-                let sounds_id = ev.typing_sound.clone().context("Missing typing sound!")?;
-                let concrete_sound = audios.category("ui")?.get(&sounds_id).context(format!("Unable to find {} sound", sounds_id))?;
-                typing_sound.0 = Some(concrete_sound.clone());
+            UiChangeInnerMessage::Unset { target_element } => {
+                match target_element {
+                    UiChangeTarget::UiSounds => ui_sounds.0 = None,
+                    UiChangeTarget::TypingSound => typing_sound.0 = None,
+                    _ => { }
+                }
             }
-        };
+        }
     }
 
     Ok(())

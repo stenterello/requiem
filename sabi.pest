@@ -27,12 +27,19 @@ stage_command = { "(" ~ stage_command_type ~ ")" }
         animation_change |
         audio_change }
     background_change = { background_directive }
-    ui_change = { "set" ~ ui_element ~ "to" ~ expr ~ image_mode? ~ audio_volume? }
+    ui_change = { ui_change_operation }
     scene_change = { "Scene" ~ expr ~ "begins" }
     act_change = { "Act" ~ expr ~ "begins" }
     character_change = { character_name ~ character_action }
     animation_change = { animation_identifier ~ animation_action }
     audio_change = { audio_command ~ audio_category ~ expr ~ audio_volume? }
+    
+ui_change_operation = {
+                          (ui_set_command ~ ui_element ~ "to" ~ expr ~ image_mode? ~ audio_volume?) |
+                          (ui_unset_command ~ ui_element)
+                      }
+ui_set_command = { "set" }
+ui_unset_command = { "unset" }
 
 // Code statements
 code = { "{" ~ code_statement ~ "}" }
