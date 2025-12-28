@@ -542,7 +542,7 @@ fn update_chatbox(
             **namebox_visibility = Visibility::Hidden;
         };
         
-        info!("MESSAGE {}", ev.message);
+        info!("character: {:?}, dialogue {}", ev.name, ev.message);
         message_text.0.message = ev.message.clone();
         if let Some(sound) = &typing_sound.0 {
             if q_typing_player.is_empty() {
