@@ -298,8 +298,12 @@ fn update_audio(
                         if !q_sinks.p0().is_empty() {
                             let mut q_music_sink = q_sinks.p0();
                             let (entity, music_sink, _) = q_music_sink.single_mut()?;
-                            music_sink.stop();
-                            commands.entity(entity).despawn();
+                            if let Some(eff) = &msg.effect {
+                                commands.entity(entity).insert(Effect(eff.clone(), 0.));
+                            } else {
+                                music_sink.stop();
+                                commands.entity(entity).despawn();
+                            }
                         }
                     },
                     "sfx" => {
@@ -307,8 +311,12 @@ fn update_audio(
                             let q_sfx_sink = q_sinks.p1();
                             let (entity, sfx_sink, _) = q_sfx_sink.iter().find(|(_, _, id)| id.0 == msg.audio)
                                 .context(format!("Audio {} not found in World", msg.audio))?;
-                            sfx_sink.stop();
-                            commands.entity(entity).despawn();
+                            if let Some(eff) = &msg.effect {
+                                commands.entity(entity).insert(Effect(eff.clone(), 0.));
+                            } else {
+                                sfx_sink.stop();
+                                commands.entity(entity).despawn();
+                            }
                         }
                     },
                     _ => { return Err(anyhow::anyhow!("Forbidden category {}", msg.category).into()); }
@@ -325,9 +333,7 @@ fn run_effects(
     mut q_sinks: Query<(Entity, &Effect, &mut AudioSink)>,
 ) -> Result<(), BevyError> {
     
-    info!("run effects");
     for (entity, effect, mut sink) in &mut q_sinks {
-        info!("inside");
         let step = match effect.0 {
             AudioEffect::FadeIn  => 0.001,
             AudioEffect::FadeOut => -0.001,
@@ -341,7 +347,8 @@ fn run_effects(
                     }
                 } else {
                     if new_value <= effect.1 {
-                        commands.entity(entity).remove::<Effect>();
+                        commands.entity(entity).despawn();
+                        return Ok(())
                     }
                 }
                 Volume::Linear(new_value)
