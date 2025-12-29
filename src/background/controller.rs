@@ -210,7 +210,7 @@ fn update_background(
                 commands.entity(background_query.0).with_child((
                     ImageNode {
                         image: image_handle.clone(),
-                        color: Color::default().with_alpha(1.),
+                        color: Color::default().with_alpha(0.),
                         ..default()
                     },
                     Node {
