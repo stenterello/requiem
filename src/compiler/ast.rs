@@ -122,6 +122,12 @@ pub(crate) enum UiChangeCommand {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum AudioEffect {
+    FadeIn,
+    FadeOut,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum StageCommand {
     BackgroundChange { operation: BackgroundOperation },
@@ -130,7 +136,7 @@ pub(crate) enum StageCommand {
     ActChange { act_expr: Box<Expr> },
     CharacterChange { character: String, operation: ActorOperation },
     AnimationChange { animation: String, operation: ActorOperation },
-    AudioChange { command: AudioCommand, category: String, audio: String, volume: f32 },
+    AudioChange { command: AudioCommand, category: String, audio: String, volume: f32, effect: Option<AudioEffect> },
 }
 
 #[derive(Debug, Clone)]
@@ -536,15 +542,32 @@ pub(crate) fn build_stage_command(pair: Pair<Rule>) -> Result<Statement> {
             let command: AudioCommand = inner_rules.next().context("Could not get audio command")?.as_str().try_into()?;
             let category = inner_rules.next().context("Could not get audio category")?.as_str().to_owned();
             let audio = inner_rules.next().context("Could not get audio name")?.as_str().to_owned().trim().trim_matches('"').to_owned();
-            let volume = if let Some(def) = inner_rules.next() {
-                ensure!(def.as_rule() == Rule::audio_volume,
-                    "Expected audio volume, found {:?}", def.as_rule());
-                let mut volume_pairs = def.into_inner();
-                let value = volume_pairs.next().context("Volume value not found")?;
-                if value.as_str().contains(".") { value.as_str().parse::<f32>()? } else { value.as_str().parse::<i32>()? as f32 }
-            } else { 1. };
+            let mut volume = 1.;
+            let mut audio_effect: Option<AudioEffect> = None;
+            while let Some(def) = inner_rules.next() {
+                match def.as_rule() {
+                    Rule::audio_volume => {
+                        let mut volume_pairs = def.into_inner();
+                        let value = volume_pairs.next().context("Volume value not found")?;
+                        volume = if value.as_str().contains(".") { value.as_str().parse::<f32>()? } else { value.as_str().parse::<i32>()? as f32 };
+                    },
+                    Rule::audio_effect => {
+                        match def.as_str() {
+                            "fade in" => audio_effect = Some(AudioEffect::FadeIn),
+                            "fade out" => audio_effect = Some(AudioEffect::FadeOut),
+                            other => { return Err(anyhow::anyhow!("Unexpected audio effect {:?}", other).into()); }
+                        }
+                    },
+                    other => { return Err(anyhow::anyhow!("Unexpected rule {:?}", other).into()) }
+                }
+            }
             
-            StageCommand::AudioChange { command, category, audio, volume }
+            if let Some(eff) = &audio_effect {
+                if command == AudioCommand::Start && eff != &AudioEffect::FadeIn { return Err(anyhow::anyhow!("AudioCommand::Start currently supports only fade in effect").into()); }
+                if command == AudioCommand::Stop && eff != &AudioEffect::FadeOut { return Err(anyhow::anyhow!("AudioCommand::Stop currently supports only fade out effect").into()); }
+            }
+            
+            StageCommand::AudioChange { command, category, audio, volume, effect: audio_effect }
         }
         other => bail!("Unexpected rule in stage command: {:?}", other)
     };

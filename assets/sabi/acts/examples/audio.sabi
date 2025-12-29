@@ -7,7 +7,7 @@ SCENE audio
     Nayu: "Finally, we are supporting audio! I can already see it, in my mind..."
     (unset typing sound)
     Nayu: (happy) "All those beutiful VN scenes you are gonna write..."
-    (start music "acoustic smile" volume 0.5)
+    (start music "acoustic smile" volume 0.5 fade in)
     Nayu: (happyspeaking) "...made even better by beautiful background musics, accompanying those wonderful words..."
     (Animated "fire" appears right scale 3)
     (pause music "acoustic smile")

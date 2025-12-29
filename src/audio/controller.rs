@@ -4,7 +4,7 @@ use anyhow::Context;
 use bevy::{asset::{LoadState, LoadedFolder}, prelude::*};
 use bevy_audio::Volume;
 
-use crate::compiler::{controller::{Controller, ControllerReadyMessage, ControllersSetStateMessage, SabiState}};
+use crate::compiler::{ast::AudioEffect, controller::{Controller, ControllerReadyMessage, ControllersSetStateMessage, SabiState}};
 
 
 const AUDIO_ASSET_PATH: &str = "sabi/audio";
@@ -38,6 +38,8 @@ pub(crate) struct MusicAudio;
 pub(crate) struct SfxAudio;
 #[derive(Component)]
 pub(crate) struct AudioSourceId(pub String);
+#[derive(Component)]
+pub(crate) struct Effect(pub AudioEffect, pub f32);
 
 /* Resources */
 #[derive(Resource)]
@@ -66,10 +68,11 @@ pub(crate) struct AudioChangeMessage {
     pub category: String,
     pub audio: String,
     pub volume: f32,
+    pub effect: Option<AudioEffect>,
 }
 
 /* Custom Types */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AudioCommand {
     Start,
     Stop,
@@ -104,6 +107,7 @@ impl Plugin for AudioController {
             .add_systems(Update, check_loading_state.run_if(in_state(AudioControllerState::Loading)))
             .add_systems(Update, (
                 update_audio,
+                run_effects,
             ).run_if(in_state(AudioControllerState::Running)));
     }
 }
@@ -216,24 +220,36 @@ fn update_audio(
                     _ => {}
                 }
                 let audio_player = AudioPlayer::new(concrete_audio.to_owned());
+                // We currently support only fade in for start command, so there is just this check
+                let volume = if let Some(_) = msg.effect {
+                    0.
+                } else { msg.volume };
                 let playback_settings = PlaybackSettings {
-                    volume: Volume::Linear(msg.volume),
+                    volume: Volume::Linear(volume),
                     ..default()
                 };
                 if msg.category.as_str() == "music" {
-                    commands.spawn((
+                    let entity = commands.spawn((
                         audio_player,
                         playback_settings,
                         AudioSourceId(msg.audio.clone()),
                         MusicAudio
-                    ));
+                    )).id();
+                    if let Some(e) = &msg.effect {
+                        commands.entity(entity).insert(Effect(e.clone(), msg.volume));
+                    }
                 } else if msg.category.as_str() == "sfx" {
-                    commands.spawn((
+                    let entity = commands.spawn((
                         audio_player,
                         playback_settings,
                         AudioSourceId(msg.audio.clone()),
                         SfxAudio
-                    ));
+                    )).id();
+                    if let Some(e) = &msg.effect {
+                        commands.entity(entity).insert(Effect(e.clone(), msg.volume));
+                    }
+                } else {
+                    return Err(anyhow::anyhow!(format!("Invalid audio category {}", msg.category.as_str())).into());
                 }
             },
             AudioCommand::Pause => {
@@ -301,5 +317,38 @@ fn update_audio(
         }
     }
     
+    Ok(())
+}
+
+fn run_effects(
+    mut commands: Commands,
+    mut q_sinks: Query<(Entity, &Effect, &mut AudioSink)>,
+) -> Result<(), BevyError> {
+    
+    info!("run effects");
+    for (entity, effect, mut sink) in &mut q_sinks {
+        info!("inside");
+        let step = match effect.0 {
+            AudioEffect::FadeIn  => 0.001,
+            AudioEffect::FadeOut => -0.001,
+        };
+        let new_value = match sink.volume() {
+            Volume::Linear(val) => {
+                let new_value = val + step;
+                if step > 0. {
+                    if new_value >= effect.1 {
+                        commands.entity(entity).remove::<Effect>();
+                    }
+                } else {
+                    if new_value <= effect.1 {
+                        commands.entity(entity).remove::<Effect>();
+                    }
+                }
+                Volume::Linear(new_value)
+            }
+            _ => { return Err(anyhow::anyhow!("Effects can be applied only to AudioSinks with Volume::Linear definitions").into()); }
+        };
+        sink.set_volume(new_value);
+    }
     Ok(())
 }

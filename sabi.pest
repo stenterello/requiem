@@ -32,7 +32,7 @@ stage_command = { "(" ~ stage_command_type ~ ")" }
     act_change = { "Act" ~ expr ~ "begins" }
     character_change = { character_name ~ character_action }
     animation_change = { animation_identifier ~ animation_action }
-    audio_change = { audio_command ~ audio_category ~ expr ~ audio_volume? }
+    audio_change = { audio_command ~ audio_category ~ expr ~ audio_volume? ~ audio_effect? }
     
 ui_change_operation = {
                           (ui_set_command ~ ui_element ~ "to" ~ expr ~ image_mode? ~ audio_volume?) |
@@ -168,6 +168,7 @@ audio_category = {
                      "sfx" 
                  }
 audio_volume =   { "volume" ~ number }
+audio_effect = { "fade in" | "fade out" }
 
 
 // Intrinsic types

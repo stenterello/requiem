@@ -306,12 +306,12 @@ fn run<'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i> (
                             },
                             _ => { None }
                         },
-                        ast::StageCommand::AudioChange { command, category, audio, volume } => {
+                        ast::StageCommand::AudioChange { command, category, audio, volume, effect } => {
                             match command {
-                                AudioCommand::Start => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Stop, category, audio, volume })),
-                                AudioCommand::Pause => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Unpause, category, audio, volume })),
-                                AudioCommand::Unpause => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Pause, category, audio, volume })),
-                                AudioCommand::Stop => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Start, category, audio, volume })),
+                                AudioCommand::Start => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Stop, category, audio, volume, effect })),
+                                AudioCommand::Pause => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Unpause, category, audio, volume, effect })),
+                                AudioCommand::Unpause => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Pause, category, audio, volume, effect })),
+                                AudioCommand::Stop => Some(Statement::Stage(ast::StageCommand::AudioChange { command: AudioCommand::Start, category, audio, volume, effect })),
                             }
                         }
                         _ => { None }

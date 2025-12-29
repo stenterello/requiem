@@ -142,9 +142,9 @@ impl Invoke for StageCommand {
                 };
                 ctx.actor_change_message.write(message);
             },
-            StageCommand::AudioChange { command, category, audio, volume } => {
+            StageCommand::AudioChange { command, category, audio, volume, effect } => {
                 info!("Invoking StageCommand::AudioChange command {:?} category {} audio {:?}", command, category, audio);
-                let message = AudioChangeMessage { command: command.clone(), category: category.clone(), audio: audio.clone(), volume: volume.clone() };
+                let message = AudioChangeMessage { command: command.clone(), category: category.clone(), audio: audio.clone(), volume: volume.clone(), effect: effect.clone() };
                 ctx.audio_change_message.write(message);
             }
         }
