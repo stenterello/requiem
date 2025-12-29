@@ -12,7 +12,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 anyhow = "1.0"
-bevy = "0.17"
+bevy = { version = "0.17", features = [ "jpeg" ] }
 bevy_ui_widgets = "0.17"
 bevy_audio = { version = "0.17", features = ["mp3", "wav"] }
 json = "0.12.4"
