@@ -119,6 +119,10 @@ pub(crate) struct FontRegistry(pub HashMap<String, Handle<Font>>);
 pub(crate) struct CurrentFont(pub Handle<Font>);
 #[derive(Resource)]
 pub(crate) struct DefaultFont(pub Handle<Font>);
+#[derive(Resource)]
+pub(crate) struct DefaultTextBox(pub Handle<Image>);
+#[derive(Resource)]
+pub(crate) struct DefaultNameBox(pub Handle<Image>);
 #[derive(Resource, Default)]
 pub(crate) struct UiFolderLoaded(pub bool);
 #[derive(Resource, Default)]
@@ -411,6 +415,10 @@ fn setup(
                         return Err(anyhow::anyhow!("Could not find chat loaded folder!").into());
                     }
 
+                    let default_textbox = gui_sprites.get("TEXTBOX_NASTYA").context("Unable to find default textbox")?;
+                    let default_namebox = gui_sprites.get("NAMEBOX").context("Unable to find default namebox")?;
+                    commands.insert_resource(DefaultTextBox(default_textbox.clone()));
+                    commands.insert_resource(DefaultNameBox(default_namebox.clone()));
                     commands.insert_resource(UiImages(gui_sprites));
                 },
                 LoadState::Failed(e) => {
@@ -442,9 +450,9 @@ fn setup(
                         return Err(anyhow::anyhow!("Could not find chat loaded folder!").into());
                     }
 
-                    let default_handle = fonts.get("ALLER").context("Default font ALLER is not present")?.clone();
-                    commands.insert_resource(DefaultFont(default_handle.clone()));
-                    commands.insert_resource(CurrentFont(default_handle));
+                    let default_font_handle = fonts.get("ALLER").context("Default font ALLER is not present")?.clone();
+                    commands.insert_resource(DefaultFont(default_font_handle.clone()));
+                    commands.insert_resource(CurrentFont(default_font_handle));
                     commands.insert_resource(FontRegistry(fonts));
                 },
                 LoadState::Failed(e) => {
@@ -472,6 +480,8 @@ fn spawn_chatbox(
     mut commands: Commands,
     ui_root: Single<Entity, With<UiRoot>>,
     current_font: Res<CurrentFont>,
+    default_namebox: Res<DefaultNameBox>,
+    default_textbox: Res<DefaultTextBox>,
 ) -> Result<(), BevyError> {
     // Spawn Backplate + Nameplate
     // Container
@@ -483,7 +493,7 @@ fn spawn_chatbox(
     commands.entity(container).add_child(top_section);
 
     // Namebox Node
-    let namebox = commands.spawn(namebox()).id();
+    let namebox = commands.spawn(namebox(default_namebox.0.clone())).id();
     commands.entity(top_section).add_child(namebox);
 
     // NameText
@@ -491,7 +501,7 @@ fn spawn_chatbox(
     commands.entity(namebox).add_child(nametext);
 
     // Backplate Node
-    let textbox_bg = commands.spawn(textbox()).id();
+    let textbox_bg = commands.spawn(textbox(default_textbox.0.clone())).id();
     commands.entity(container).add_child(textbox_bg);
 
     // MessageText

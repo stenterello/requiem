@@ -33,9 +33,12 @@ pub(in crate::chat) fn top_section() -> impl Bundle {
     Node::default()
 }
 
-pub(in crate::chat) fn namebox() -> impl Bundle {
+pub(in crate::chat) fn namebox(image: Handle<Image>) -> impl Bundle {
     (
-        ImageNode::default(),
+        ImageNode {
+            image,
+            ..default()
+        },
         Node {
             margin: UiRect::default().with_left(px(45.)),
             aspect_ratio: Some(3.),
@@ -63,9 +66,12 @@ pub(in crate::chat) fn nametext(font_handle: Handle<Font>) -> impl Bundle {
     )
 }
 
-pub(in crate::chat) fn textbox() -> impl Bundle {
+pub(in crate::chat) fn textbox(image: Handle<Image>) -> impl Bundle {
     (
-        ImageNode::default(),
+        ImageNode {
+            image,
+            ..default()
+        },
         Node {
             width: percent(100.),
             min_height: percent(100.),
