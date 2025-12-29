@@ -112,17 +112,16 @@ struct HandleToFontsFolder(Handle<LoadedFolder>);
 #[derive(Resource)]
 struct UiImages(HashMap<String, Handle<Image>>);
 #[derive(Resource)]
-pub(crate) struct CurrentTextBoxBackground(pub ImageNode);
+pub(crate) struct CurrentTextBoxBackground(pub Handle<Image>, pub NodeImageMode);
+#[derive(Resource)]
+pub(crate) struct CurrentNameBoxBackground(pub Handle<Image>);
 #[derive(Resource, Default)]
 pub(crate) struct FontRegistry(pub HashMap<String, Handle<Font>>);
 #[derive(Resource)]
 pub(crate) struct CurrentFont(pub Handle<Font>);
 #[derive(Resource)]
 pub(crate) struct DefaultFont(pub Handle<Font>);
-#[derive(Resource)]
-pub(crate) struct DefaultTextBox(pub Handle<Image>);
-#[derive(Resource)]
-pub(crate) struct DefaultNameBox(pub Handle<Image>);
+
 #[derive(Resource, Default)]
 pub(crate) struct UiFolderLoaded(pub bool);
 #[derive(Resource, Default)]
@@ -288,7 +287,7 @@ fn button_clicked_default_state<'a>(
     let clicked = match entity.1 {
         UiButtons::OpenHistory => {
             warn!("Open history clicked");
-            let history_panel_id = commands.spawn(history_panel(current_plate, &game_state, current_font.0.clone())?).id();
+            let history_panel_id = commands.spawn(history_panel((current_plate.0.clone(), current_plate.1.clone()), &game_state, current_font.0.clone())?).id();
             commands.entity(*ui_root).add_child(history_panel_id);
             sub_state.set(ChatControllerSubState::History);
             true
@@ -417,8 +416,8 @@ fn setup(
 
                     let default_textbox = gui_sprites.get("TEXTBOX_NASTYA").context("Unable to find default textbox")?;
                     let default_namebox = gui_sprites.get("NAMEBOX").context("Unable to find default namebox")?;
-                    commands.insert_resource(DefaultTextBox(default_textbox.clone()));
-                    commands.insert_resource(DefaultNameBox(default_namebox.clone()));
+                    commands.insert_resource(CurrentTextBoxBackground(default_textbox.clone(), NodeImageMode::Auto));
+                    commands.insert_resource(CurrentNameBoxBackground(default_namebox.clone()));
                     commands.insert_resource(UiImages(gui_sprites));
                 },
                 LoadState::Failed(e) => {
@@ -480,8 +479,8 @@ fn spawn_chatbox(
     mut commands: Commands,
     ui_root: Single<Entity, With<UiRoot>>,
     current_font: Res<CurrentFont>,
-    default_namebox: Res<DefaultNameBox>,
-    default_textbox: Res<DefaultTextBox>,
+    current_namebox: Res<CurrentNameBoxBackground>,
+    current_textbox: Res<CurrentTextBoxBackground>,
 ) -> Result<(), BevyError> {
     // Spawn Backplate + Nameplate
     // Container
@@ -493,7 +492,7 @@ fn spawn_chatbox(
     commands.entity(container).add_child(top_section);
 
     // Namebox Node
-    let namebox = commands.spawn(namebox(default_namebox.0.clone())).id();
+    let namebox = commands.spawn(namebox(current_namebox.0.clone())).id();
     commands.entity(top_section).add_child(namebox);
 
     // NameText
@@ -501,7 +500,7 @@ fn spawn_chatbox(
     commands.entity(namebox).add_child(nametext);
 
     // Backplate Node
-    let textbox_bg = commands.spawn(textbox(default_textbox.0.clone())).id();
+    let textbox_bg = commands.spawn(textbox(current_textbox.0.clone())).id();
     commands.entity(container).add_child(textbox_bg);
 
     // MessageText
@@ -697,7 +696,7 @@ fn update_ui(
                             None => { return Err(anyhow::anyhow!("Ui Image Mode missing!").into()) }
                         };
                         if target_element == UiChangeTarget::TextBoxBackground {
-                            commands.insert_resource(CurrentTextBoxBackground(target.clone()));
+                            commands.insert_resource(CurrentTextBoxBackground(image.clone(), target.image_mode.clone()));
                         }
                     },
                     UiChangeTarget::Font => {

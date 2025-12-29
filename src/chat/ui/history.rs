@@ -5,10 +5,10 @@ use bevy_ui_widgets::{CoreScrollbarThumb, Scrollbar};
 
 use crate::chat::controller::{HistoryScrollbar, HistoryText, UiButtons};
 use crate::chat::ui::basic::button;
-use crate::{VisualNovelState, chat::{UI_Z_INDEX, controller::{CurrentTextBoxBackground, HistoryPanel}}};
+use crate::{VisualNovelState, chat::{UI_Z_INDEX, controller::HistoryPanel}};
 
 pub(crate) fn history_panel(
-    current_plate: Res<CurrentTextBoxBackground>,
+    (image, image_mode): (Handle<Image>, NodeImageMode),
     game_state: &ResMut<VisualNovelState>,
     font_handle: Handle<Font>,
 ) -> Result<impl Bundle, BevyError> {
@@ -18,8 +18,8 @@ pub(crate) fn history_panel(
     
     Ok((
         ImageNode {
-            image: current_plate.0.image.clone(),
-            image_mode: current_plate.0.image_mode.clone(),
+            image,
+            image_mode,
             ..default()
         },
         Node {
