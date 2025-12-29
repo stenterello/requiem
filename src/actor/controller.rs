@@ -4,8 +4,23 @@ use anyhow::{Context, Result};
 use bevy::{asset::{LoadState, LoadedFolder}, prelude::*, window::PrimaryWindow};
 use serde::Deserialize;
 
-use crate::{VisualNovelState, actor::operations::{apply_alpha, change_character_emotion, move_characters, position_relative_to_center, spawn_actor}, compiler::controller::{Controller, ControllerReadyMessage, ControllersSetStateMessage, SabiState}};
-use crate::compiler::controller::UiRoot;
+use crate::{
+    VisualNovelState,
+    actor::operations::{
+        apply_alpha,
+        change_character_emotion,
+        move_characters,
+        position_relative_to_center,
+        spawn_actor
+    },
+    compiler::controller::{
+        Controller,
+        ControllerReadyMessage,
+        ControllersSetStateMessage,
+        SabiState,
+        UiRoot
+    }
+};
 
 pub const INVISIBLE_LEFT_PERCENTAGE: f32 = -40.;
 pub const FAR_LEFT_PERCENTAGE: f32 = 5.;
@@ -302,7 +317,7 @@ impl Plugin for CharacterController {
             .insert_resource(FadingActors::default())
             .insert_resource(CharFolderLoaded::default())
             .insert_resource(AnimFolderLoaded::default())
-            .insert_resource(ActorsConfigs::default())
+            .init_resource::<ActorsConfigs>()
             .insert_resource(ActorsResource::default())
             .add_message::<ActorChangeMessage>()
             .init_state::<CharacterControllerState>()
@@ -322,10 +337,9 @@ fn clean_resources(
     anim_loaded_folder.0 = false;
 }
 fn define_characters_map(
-    commands: &mut Commands,
     actor_config_assets: &Res<Assets<ActorConfig>>,
     loaded_folder: &LoadedFolder,
-    actual_configs: &ResMut<ActorsConfigs>,
+    actual_configs: &mut ResMut<ActorsConfigs>,
     sprite_resource: &mut ResMut<ActorsResource>,
 ) -> Result<(), BevyError> {
     
@@ -374,14 +388,15 @@ fn define_characters_map(
     for spr in characters_sprites {
         sprite_resource.0.insert(SpriteIdentifier::Character(spr.0), spr.1);
     }
-    commands.insert_resource(ActorsConfigs(actual_configs.0.clone().into_iter().chain(characters_configs).collect()));
+    for config in characters_configs {
+        actual_configs.0.insert(config.0, config.1);
+    }
     Ok(())
 }
 fn define_animations_map(
-    commands: &mut Commands,
     config_res: &Res<Assets<ActorConfig>>,
     loaded_folder: &LoadedFolder,
-    actual_configs: &ResMut<ActorsConfigs>,
+    actual_configs: &mut ResMut<ActorsConfigs>,
     sprite_resource: &mut ResMut<ActorsResource>,
 ) -> Result<(), BevyError> {
     
@@ -406,18 +421,19 @@ fn define_animations_map(
     for anim in animations_sprites {
         sprite_resource.0.insert(SpriteIdentifier::Animation(anim.0), anim.1);
     }
-    commands.insert_resource(ActorsConfigs(actual_configs.0.clone().into_iter().chain(animations_configs).collect()));
+    for config in animations_configs {
+        actual_configs.0.insert(config.0, config.1);
+    }
     
     Ok(())
 }
 fn setup(
-    mut commands: Commands,
     asset_server: Res<AssetServer>,
     loaded_folders: Res<Assets<LoadedFolder>>,
     folder_char_handle: Res<HandleToCharactersFolder>,
     folder_anim_handle: Res<HandleToAnimationsFolder>,
     actor_config_asset: Res<Assets<ActorConfig>>,
-    actual_configs: ResMut<ActorsConfigs>,
+    mut actual_configs: ResMut<ActorsConfigs>,
     mut sprite_resource: ResMut<ActorsResource>,
     mut char_folder_loaded: ResMut<CharFolderLoaded>,
     mut anim_folder_loaded: ResMut<AnimFolderLoaded>,
@@ -431,7 +447,7 @@ fn setup(
             match state {
                 LoadState::Loaded => {
                     if let Some(loaded_folder) = loaded_folders.get(folder_char_handle.0.id()) {
-                        define_characters_map(&mut commands, &actor_config_asset, loaded_folder, &actual_configs, &mut sprite_resource)?;
+                        define_characters_map(&actor_config_asset, loaded_folder, &mut actual_configs, &mut sprite_resource)?;
                         char_folder_loaded.0 = true;
                     } else {
                         return Err(anyhow::anyhow!("Error loading character assets").into());
@@ -451,7 +467,7 @@ fn setup(
             match state {
                 LoadState::Loaded => {
                     if let Some(loaded_folder) = loaded_folders.get(folder_anim_handle.0.id()) {
-                        define_animations_map(&mut commands, &actor_config_asset, loaded_folder, &actual_configs, &mut sprite_resource)?;
+                        define_animations_map(&actor_config_asset, loaded_folder, &mut actual_configs, &mut sprite_resource)?;
                         anim_folder_loaded.0 = true;
                     } else {
                         return Err(anyhow::anyhow!("Error loading animation assets").into());
