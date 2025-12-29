@@ -172,6 +172,11 @@ pub(crate) enum UiButtons {
     InfoText,
 }
 
+/* Utils methods */
+fn truncate_unicode(s: &str, max_chars: usize) -> String {
+    s.chars().take(max_chars).collect()
+}
+
 pub(crate) struct ChatController;
 impl Plugin for ChatController {
     fn build(&self, app: &mut App){
@@ -587,7 +592,7 @@ fn update_chatbox(
     }
 
     // Return the section and apply it to the text object
-    original_string.truncate(length);
+    original_string = truncate_unicode(&original_string, length);
     message_text.1.0 = original_string;
 
     Ok(())
@@ -623,7 +628,7 @@ fn update_infotext(
     let length: u32 = (scroll_stopwatch.0.elapsed_secs() * 25.) as u32;
 
     // Return the section and apply it to the text object
-    original_string.truncate(length as usize);
+    original_string = truncate_unicode(&original_string, length as usize);
     info_text.1.0 = original_string;
     
     Ok(())
